@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { HandKey, Pose } from '../posing/posing';
 
+const DEG = 180 / Math.PI;
+
 /**
  * Things to grab on the goalie, in its own frame: a ball on each hand (yellow = glove, blue = blocker), drawn over
  * everything so it can always be clicked, and the turn ring round its feet with a knob straight ahead.
@@ -32,10 +34,14 @@ export function createGoalieHelpers() {
 
   return {
     group, hands, turnRing, knob,
-    update(pose: Pose) {
+    /** Puts each ball on its wrist, turned like the wrist. keepHands: leave them be (the rotate gizmo is turning one). */
+    update(pose: Pose, keepHands = false) {
+      if (keepHands) return;
       for (const w of ['glove', 'blocker'] as const) {
-        const p = pose[w].wrist;
-        hands[w].position.set(p.x, p.y, p.z);
+        const h = pose[w], s = h.side;
+        hands[w].position.set(h.wrist.x, h.wrist.y, h.wrist.z);
+        // The posing module's wrist turn, as a three.js Euler: Euler(-pitch, side*yaw, -side*roll, 'YXZ').
+        hands[w].quaternion.setFromEuler(new THREE.Euler(-h.rot.pitch / DEG, s * h.rot.yaw / DEG, -s * h.rot.roll / DEG, 'YXZ'));
       }
     },
   };

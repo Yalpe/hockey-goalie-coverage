@@ -11,6 +11,7 @@
     <div id="puckTag">Puck</div>
     <div id="youArePuck">Puck's view: looking over the Puck at the net</div>
     <div id="flash" role="status"></div>
+    <div id="warn" role="status" hidden></div>
     <div id="noShot" role="status">The Puck is on or behind the goal line: there is no shot.</div>
     <section id="coverageCard" aria-label="Coverage"></section>
     <section id="card" class="card" aria-label="Selection">
@@ -26,8 +27,14 @@
       <div data-panel="goalie" id="goaliePanel"></div>
       <div data-panel="hand">
         <b class="title" data-hand-title></b>
-        <div class="hint">Moving and turning the hands comes next.</div>
-        <div class="row"><button type="button" data-reset-hand>Reset this hand</button></div>
+        <div class="hint">The arrows follow the shot: one runs along the line from the Puck through the hand (depth),
+          the others move it across and up or down. The <b>mouse wheel</b> also moves it along the shot (handy in Puck's
+          view, where that arrow points at you). The rings turn, tilt and twist it.
+          <kbd>W</kbd> move · <kbd>E</kbd> rotate · <kbd>Esc</kbd> done.</div>
+        <div class="row">
+          <button type="button" data-mode="translate">Move</button><button type="button" data-mode="rotate">Rotate</button>
+          <button type="button" data-reset-hand>Reset this hand</button>
+        </div>
       </div>
     </section>
     <span id="mapCap">From above: drag the Puck</span>

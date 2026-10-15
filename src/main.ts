@@ -11,6 +11,7 @@ import { defaultHands, solvePose, type HandKey, type Pose } from './posing/posin
 import { createCoverageLayer } from './scene/coverageLayer';
 import { createGoalieHelpers } from './scene/goalieHelpers';
 import { createGoalieMesh } from './scene/goalieMesh';
+import { createHandGizmo, type GizmoMode } from './scene/handGizmo';
 import { buildNet } from './scene/net';
 import { buildPuck, clampPuck, DEFAULT_PUCK, type PuckSpot } from './scene/puck';
 import { buildRink } from './scene/rink';
@@ -68,6 +69,41 @@ const hullCache = new HullCache();
 const coverageLayer = createCoverageLayer();
 scene.add(coverageLayer.group);
 
+// ---------------- hands ----------------
+/** +1 when hand w is on the goalie's left. */
+const handSide = (w: HandKey) => (w === 'glove') === (goalie.catchSide === 'left') ? 1 : -1;
+/** Asks for hand w at world position p; the posing module clamps it to the Stance's limits and arm reach. */
+function moveHandToWorld(w: HandKey, p: THREE.Vector3) {
+  const l = goalieRoot.worldToLocal(p.clone()), s = handSide(w), H = goalie.heightM;
+  goalie[w] = { ...goalie[w], out: l.x * s / H, up: l.y / H, fwd: l.z / H };
+  updatePose();
+}
+/** Takes where a held-back hand actually ended up as its new setting. */
+const settleHand = (w: HandKey) => { goalie[w] = { ...pose[w].placedFrac }; };
+
+const gizmo = createHandGizmo({
+  camera, canvas, scene, hands: helpers.hands, puck,
+  onMove: moveHandToWorld,
+  onTurn: (w, ball) => {
+    const p = ball.position, s = handSide(w), H = goalie.heightM;
+    const e = new THREE.Euler().setFromQuaternion(ball.quaternion, 'YXZ');
+    goalie[w] = { out: p.x * s / H, up: p.y / H, fwd: p.z / H, yaw: s * e.y * DEG, pitch: -e.x * DEG, roll: -s * e.z * DEG };
+    updatePose(true);
+  },
+  onDragging: (on, w) => {
+    orbit.enabled = !on;
+    if (!on) { settleHand(w); updatePose(); gizmo.show(w); }
+  },
+});
+
+function renderWarn() {
+  const msgs = (['glove', 'blocker'] as const).filter(w => pose[w].flags.length)
+    .map(w => `${w === 'glove' ? 'Glove' : 'Blocker'} held back: ${pose[w].flags.join(', ')}`);
+  const el = $('#warn');
+  el.hidden = !msgs.length;
+  el.textContent = msgs.join(' · ');
+}
+
 // ---------------- cards ----------------
 const covCard = coverageCard($('#coverageCard'));
 const gCard = goalieCard($('#goaliePanel'), {
@@ -90,23 +126,35 @@ function renderCard() {
   document.querySelectorAll<HTMLElement>('#card [data-panel]').forEach(d => d.hidden = d.dataset.panel !== panel);
   if (sel === 'goalie') gCard.render(goalie, depthNow(goalie, pose));
   $('[data-hand-title]').textContent = sel === 'glove' ? 'Glove Hand' : 'Blocker Hand (and stick)';
+  document.querySelectorAll<HTMLElement>('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === gizmo.mode));
 }
+
+const isHand = (k: Selection): k is HandKey => k === 'glove' || k === 'blocker';
 
 function select(k: Selection) {
   sel = k;
   helpers.turnRing.visible = sel === 'goalie';
-  orbit.enableZoom = sel !== 'goalie';   // the wheel sets a selected goalie's depth instead
+  gizmo.show(isHand(sel) ? sel : null);
+  // The wheel sets a selected goalie's depth, or moves a selected hand along the shot, instead of zooming.
+  orbit.enableZoom = sel === null || sel === 'puck';
   renderCard();
 }
 
+function setGizmoMode(m: GizmoMode) { gizmo.setMode(m); renderCard(); }
+document.querySelectorAll<HTMLElement>('[data-mode]').forEach(b => b.addEventListener('click', () => setGizmoMode(b.dataset.mode as GizmoMode)));
+
 // ---------------- updates ----------------
-/** The goalie's pose changed (Stance, height, Catch Side, hands): re-solve, rebuild what changed, then place it. */
-function updatePose() {
+/**
+ * The goalie's pose changed (Stance, height, Catch Side, hands): re-solve, rebuild only the parts that changed, then
+ * place it. keepHands: the rotate gizmo is turning a hand's ball, so leave the balls be.
+ */
+function updatePose(keepHands = false) {
   pose = solvePose(goalie);
   const parts = goalieParts(pose);
   goalieMesh.update(parts);
   hulls = hullCache.hulls(parts);
-  helpers.update(pose);
+  helpers.update(pose, keepHands);
+  renderWarn();
   updatePlacement();
 }
 
@@ -127,6 +175,7 @@ function updateCoverage() {
   covCard.render(cov);
   $('#noShot').style.display = cov.noShot ? 'block' : 'none';
   renderMap();
+  gizmo.realign();   // the shot runs from the Puck through the hand, so the arrows follow both
 }
 
 /** Moves the Puck, kept on the ice. refollow: bring a following view along now (not while dragging it in 3D). */
@@ -212,6 +261,7 @@ function grab(e: PointerEvent, d: Drag) {
 function onPointerDown(e: PointerEvent) {
   downAt = null;
   if (e.target !== canvas || e.button !== 0) return;
+  if (gizmo.busy) { orbit.enabled = false; return; }   // the hand gizmo takes this press
   setRay(e);
   const hand = ray.intersectObjects([helpers.hands.glove, helpers.hands.blocker])[0];
   if (hand) return select(hand.object === helpers.hands.glove ? 'glove' : 'blocker');
@@ -255,8 +305,20 @@ canvas.addEventListener('pointerup', e => {
     if (k === 'puck') refollowView();
   } else if (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 4) select(null);   // a click on empty space
   downAt = null;
+  orbit.enabled = true;
 });
 canvas.addEventListener('wheel', e => {
+  // A selected hand: the wheel moves it along the shot, 2 cm per notch (wheel up = toward the Puck). Handy in Puck's
+  // view, where that arrow points at the camera.
+  if (isHand(sel)) {
+    e.preventDefault();
+    const n = wheelNotches(e);
+    if (!n) return;
+    moveHandToWorld(sel, gizmo.handWorld(sel).add(gizmo.shotDir(sel).multiplyScalar(-0.02 * n)));
+    settleHand(sel);
+    updatePose();
+    return;
+  }
   // A selected goalie: the wheel sets its depth, 1 inch per notch (wheel up = further out). Otherwise it zooms.
   if (sel !== 'goalie' || goalie.lock === 'post') return;
   e.preventDefault();
@@ -264,7 +326,10 @@ canvas.addEventListener('wheel', e => {
   if (n) { setDepth(goalie, (Math.round(depthNow(goalie, pose) / IN) - n) * IN); updatePlacement(); }
 }, { passive: false });
 addEventListener('keydown', e => {
-  if (e.key === 'Escape' && !(e.target as HTMLElement).closest('input, textarea')) select(null);
+  if ((e.target as HTMLElement).closest('input, textarea')) return;
+  if (e.key === 'Escape') select(null);
+  else if (isHand(sel) && (e.key === 'w' || e.key === 'W')) setGizmoMode('translate');
+  else if (isHand(sel) && (e.key === 'e' || e.key === 'E')) setGizmoMode('rotate');
 });
 
 // ---------------- notices ----------------

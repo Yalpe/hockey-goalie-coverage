@@ -111,3 +111,17 @@ html, body {
   background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; font-weight: 600;
   padding: 6px 12px; border-radius: 8px;
 }
+
+/* Why a hand is held back, bottom centre */
+#warn {
+  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 7; max-width: calc(100% - 780px);
+  background: #fff7ed; border: 1px solid #fdba74; color: #9a3412; font-weight: 600;
+  padding: 4px 12px; border-radius: 8px; text-align: center;
+}
+#warn[hidden] { display: none; }
+@media (max-width: 1100px) { #warn { bottom: auto; top: 128px; max-width: calc(100% - 24px); } }
+
+kbd {
+  font: 11px ui-monospace, Consolas, monospace; background: #eef2f6; border: 1px solid #cbd5e1;
+  border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; color: var(--ink);
+}
