@@ -22,7 +22,7 @@ Context from [Coverage rendering prototype](05-coverage-prototype.md):
 
 ## Assets
 
-- Prototype: [prototypes/controls-prototype.html](../../prototypes/controls-prototype.html). Double-click to open; Three.js and clipper2-ts load from a CDN. It opens in Puck's view with the decided coverage drawing. Three variants are switchable with `?variant=A|B|C`, the black bar, or the `[` `]` keys (the arrow keys belong to C):
+- Prototype: [prototypes/controls-prototype.html](https://github.com/Yalpe/hockey-goalie-coverage/blob/prototype/controls/prototypes/controls-prototype.html) on the `prototype/controls` branch. Double-click to open; Three.js and clipper2-ts load from a CDN. It opens in Puck's view with the decided coverage drawing. Three variants are switchable with `?variant=A|B|C`, the black bar, or the `[` `]` keys (the arrow keys belong to C):
   - **A, Grab it in 3D:** no side panel. Click the Puck, the goalie or a hand; a card shows what can be changed. Drag the goalie on the ice (it snaps to the top of the crease, and to the post in RVH), turn it with a ring knob, and move or rotate a hand with a 3D gizmo (`W`/`E`). In Puck's view, a corner map from above is how you move the Puck.
   - **B, Control panel + rink map:** the 3D view is only for looking. The panel has a top-down rink map (drag the Puck, drag the goalie, turn it with a knob), Puck spots, position buttons (Top / Mid / Deep / Post), a Facing slider, and six named sliders per hand, limited to the Stance's reach box.
   - **C, Tools + keyboard:** pick a tool (`Q` Puck, `W` Goalie, `E` Glove, `R` Blocker). Drag anywhere to act on it. The wheel turns the goalie or moves a hand in and out; `Shift`/`Ctrl`+drag turns, tilts or twists a wrist; the arrow keys nudge; `1`–`5` switch views; right-drag orbits.
@@ -80,4 +80,4 @@ Not chosen:
 
 What the controls now put in a Setup (input for **Setup contents**): Stance, height, Catch Side, goalie `{x, z, facingDeg}` plus its placement (`arc` with depth, `post`, or `free`), Follow the Puck, each hand's `{out, up, fwd, yaw, pitch, roll}`, the Puck `{x, z}`, plus the view and display toggles. The prototype's `{ }` drawer shows them live.
 
-The repo isn't under git yet, so the prototype stays in `prototypes/`. Move it to a `prototype/controls` branch when the repo is initialised.
+The prototype now lives on the `prototype/controls` branch (moved when the repo was initialised, 2026-10-15).

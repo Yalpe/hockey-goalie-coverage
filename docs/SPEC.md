@@ -27,7 +27,7 @@ Where two tickets disagree, the later one wins. In particular, **the Puck is alw
 
 ## Code to port
 
-[prototypes/controls-prototype.html](../prototypes/controls-prototype.html) is the reference. It holds the latest copies of both pure modules and the interaction layer the coach accepted.
+[prototypes/controls-prototype.html](https://github.com/Yalpe/hockey-goalie-coverage/blob/prototype/controls/prototypes/controls-prototype.html) on the `prototype/controls` branch is the reference. It holds the latest copies of both pure modules and the interaction layer the coach accepted.
 
 - **POSING MODULE** (between `==POSING MODULE START==` and `==POSING MODULE END==`): pure, no DOM, no three.js. Covers `solvePose`, `defaultHands`, `placeAtPost` and `placeAtCreaseTop`. Port it to `src/posing/` as typed TS with as little change as possible.
 - **COVERAGE MODULE** (between `==COVERAGE MODULE START==` and `==COVERAGE MODULE END==`): covers `goalieParts`, `dilatedHull`, `hullToWorld` and `computeCoverage`, plus the per-part hull cache. Port it to `src/coverage/`. It depends only on three's `ConvexHull`/`Vector3` and `clipper2-ts`.

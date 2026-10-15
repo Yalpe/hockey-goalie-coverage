@@ -12,7 +12,7 @@ Is plausible hand posing cheap enough for the MVP? Build a primitive goalie with
 
 ## Assets
 
-- Prototype: [prototypes/posing-prototype.html](../../prototypes/posing-prototype.html). Double-click to open; Three.js loads from a CDN. The pure posing module sits between the `POSING MODULE START/END` markers.
+- Prototype: [prototypes/posing-prototype.html](https://github.com/Yalpe/hockey-goalie-coverage/blob/prototype/posing/prototypes/posing-prototype.html) on the `prototype/posing` branch. Double-click to open; Three.js loads from a CDN. The pure posing module sits between the `POSING MODULE START/END` markers.
 
 ## Resolution
 
@@ -54,4 +54,4 @@ Known imperfections, accepted for the MVP and left as polish:
 - Proportions are coarse for small kids.
 - The glove and blocker are simple slabs.
 
-The repo isn't under git yet, so the prototype stays in `prototypes/` rather than on a throwaway branch. Move it to a `prototype/posing` branch when the repo is initialised.
+The prototype now lives on the `prototype/posing` branch (moved when the repo was initialised, 2026-10-15).

@@ -12,7 +12,7 @@ Using the chosen computation technique on the posed goalie, how should the Shot 
 
 ## Assets
 
-- Prototype: [prototypes/coverage-prototype.html](../../prototypes/coverage-prototype.html). Double-click to open; Three.js and clipper2-ts load from a CDN. Three variants are switchable with `?variant=A|B|C`, the bottom bar, or ← →:
+- Prototype: [prototypes/coverage-prototype.html](https://github.com/Yalpe/hockey-goalie-coverage/blob/prototype/coverage/prototypes/coverage-prototype.html) on the `prototype/coverage` branch. Double-click to open; Three.js and clipper2-ts load from a CDN. Three variants are switchable with `?variant=A|B|C`, the bottom bar, or ← →:
   - **A, Light from the Puck:** a full translucent Shot Cone, a dark Coverage Shadow, a green Open Net, and a big "% covered" card.
   - **B, Scoring lanes:** shows only what's open. Red lanes run from the Puck into each hole, each hole is labelled in coach words ("Glove side high 6%"), and the card leads with "% open".
   - **C, Puck's-eye card:** a light touch in 3D (cone edges and flat fills), plus a card showing the net as the Puck sees it, a % donut, and a top-down mini-map of the angle.
@@ -43,4 +43,4 @@ Not chosen:
 - C (the 2D Puck's-eye card and mini-map). Puck's view now shows the net from the Puck in 3D instead.
 - A's whole translucent cone, including keeping it as a toggle next to the lanes. The coach picked lanes only.
 
-The repo isn't under git yet, so the prototype stays in `prototypes/`. Move it to a `prototype/coverage` branch when the repo is initialised.
+The prototype now lives on the `prototype/coverage` branch (moved when the repo was initialised, 2026-10-15).
