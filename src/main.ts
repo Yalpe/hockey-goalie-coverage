@@ -2,6 +2,7 @@ import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { computeCoverage, HullCache, hullToWorld, type Coverage, type Hull } from './coverage/coverage';
+import { nameHoles } from './coverage/holes';
 import { goalieParts } from './coverage/parts';
 import { IN, PUCK_HALF_T } from './dims';
 import {
@@ -16,6 +17,7 @@ import { buildNet } from './scene/net';
 import { buildPuck, clampPuck, DEFAULT_PUCK, type PuckSpot } from './scene/puck';
 import { buildRink } from './scene/rink';
 import { cornerMap } from './ui/cornerMap';
+import { holeLabels } from './ui/holeLabels';
 import { coverageCard } from './ui/coverageCard';
 import { goalieCard } from './ui/goalieCard';
 import { wheelNotches } from './ui/wheel';
@@ -48,7 +50,7 @@ scene.add(buildRink(), buildNet());
 // ---------------- state ----------------
 const puck: PuckSpot = { ...DEFAULT_PUCK };
 const goalie = defaultGoalie();
-const show = { margin: true };
+const show = { cone: true, margin: true };
 type Selection = 'puck' | 'goalie' | HandKey | null;
 let sel: Selection = null;
 let currentView: ViewKey = 'puck';
@@ -106,6 +108,7 @@ function renderWarn() {
 
 // ---------------- cards ----------------
 const covCard = coverageCard($('#coverageCard'));
+const labels = holeLabels($('#labels'));
 const gCard = goalieCard($('#goaliePanel'), {
   stance: k => { setStance(goalie, k); updatePose(); },
   catchSide: c => { goalie.catchSide = c; updatePose(); },
@@ -170,9 +173,13 @@ function updatePlacement() {
 /** Recomputes the Coverage Shadow and Open Net from the Puck through the goalie's cached hulls. */
 function updateCoverage() {
   const root = { x: goalieRoot.position.x, z: goalieRoot.position.z, f: goalieRoot.rotation.y };
-  cov = computeCoverage(hulls.map(h => hullToWorld(h, root)), { x: puck.x, y: PUCK_HALF_T, z: puck.z });
-  coverageLayer.update(cov, show.margin);
-  covCard.render(cov);
+  const P = { x: puck.x, y: PUCK_HALF_T, z: puck.z };
+  cov = computeCoverage(hulls.map(h => hullToWorld(h, root)), P);
+  const pelvis = goalieRoot.localToWorld(new THREE.Vector3(pose.pelvis.x, pose.pelvis.y, pose.pelvis.z));
+  const named = cov.noShot ? [] : nameHoles(cov, P, pelvis, goalie.catchSide);
+  coverageLayer.update(cov, P, show.margin);
+  covCard.render(cov, named);
+  labels.set(named);
   $('#noShot').style.display = cov.noShot ? 'block' : 'none';
   renderMap();
   gizmo.realign();   // the shot runs from the Puck through the hand, so the arrows follow both
@@ -192,10 +199,21 @@ function renderMap() {
 
 // ---------------- views ----------------
 const viewbar = $('#viewbar');
-viewbar.innerHTML = VIEWS.map(({ key, label }) => `<button type="button" data-view="${key}">${label}</button>`).join('');
+viewbar.innerHTML = VIEWS.map(({ key, label }) => `<button type="button" data-view="${key}">${label}</button>`).join('') + `
+  <span class="toggles">
+    <label><input type="checkbox" data-show="cone"> Shot Cone</label>
+    <label><input type="checkbox" data-show="margin"> Puck-size margin</label>
+  </span>`;
 viewbar.addEventListener('click', e => {
   const k = (e.target as HTMLElement).closest<HTMLElement>('[data-view]')?.dataset.view as ViewKey | undefined;
   if (k) setView(k);
+});
+viewbar.addEventListener('change', e => {
+  const i = e.target as HTMLInputElement;
+  if (!i.dataset.show) return;
+  show[i.dataset.show as keyof typeof show] = i.checked;
+  renderViewState();
+  updateCoverage();
 });
 
 function setView(k: ViewKey) {
@@ -218,6 +236,8 @@ function renderViewState() {
   puckMesh.ring.visible = !puckView;   // up close in Puck's view the ring would fill the screen; the map moves the Puck there
   $('#youArePuck').style.display = puckView ? 'block' : 'none';
   $('#cornerMap').style.display = $('#mapCap').style.display = puckView ? '' : 'none';
+  coverageLayer.lanesVisible = show.cone && !puckView;   // from behind the Puck, the lanes would fill the screen
+  viewbar.querySelectorAll<HTMLInputElement>('[data-show]').forEach(i => i.checked = show[i.dataset.show as keyof typeof show]);
   if (cov) renderMap();
 }
 
@@ -365,6 +385,7 @@ renderer.setAnimationLoop(() => {
     const x = (tagAt.x + 1) / 2 * canvas.clientWidth, y = (1 - tagAt.y) / 2 * canvas.clientHeight - 14;
     puckTag.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;
   }
+  labels.place(camera, canvas.clientWidth, canvas.clientHeight);
 });
 
 updatePose();

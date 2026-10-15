@@ -65,7 +65,7 @@ The prototypes are throwaway. Don't build on top of them; port from them.
 ### 3. Coverage
 
 - Port the COVERAGE MODULE with its per-part hull cache.
-- On the goal plane: a dark Coverage Shadow (slate, ~80% opaque) and a green Open Net (~70%). Add the dashed Puck-size margin outline (the 69" × 47" scoring rectangle), on by default.
+- On the goal plane: a dark Coverage Shadow (slate, ~80% opaque) and a green Open Net (~70%). Shade the Puck-size margin (the strip outside the 69" × 47" scoring rectangle) like the shadow, on by default (amended: see the coverage ticket).
 - The "% covered" card top-right: a big %, a covered/open bar, and "Open Net x% · n sq in".
 - With the Puck on or behind the goal line, the scene and card say there is no shot.
 

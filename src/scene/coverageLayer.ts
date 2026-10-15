@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { SCORE_RECT, type Coverage, type Shape2 } from '../coverage/coverage';
+import { holesOf } from '../coverage/holes';
 import { MOUTH_H, MOUTH_HALF_W } from '../dims';
+import type { Vec } from '../posing/vec';
 
 /**
  * What the coverage looks like on the goal plane: the Coverage Shadow (dark slate) and the Open Net (green), drawn
@@ -42,13 +44,38 @@ export function createCoverageLayer() {
     }));
   };
 
+  // Scoring lanes: a translucent green fan from the Puck into each hole (~18%), with the hole outlined.
+  const lanes = new THREE.Group();
+  const laneMat = flatMat(0x22c55e, 0.18), laneLine = new THREE.LineBasicMaterial({ color: 0x15803d });
+  group.add(lanes);
+  function buildLanes(cov: Coverage, P: Vec) {
+    for (const o of lanes.children) (o as THREE.Mesh).geometry.dispose();
+    lanes.clear();
+    if (cov.noShot) return;
+    for (const s of holesOf(cov)) {
+      const ring = s.outer, pos: number[] = [];
+      for (let i = 0; i < ring.length; i++) {
+        const a = ring[i], b = ring[(i + 1) % ring.length];
+        pos.push(P.x, P.y, P.z, a.x, a.y, 0, b.x, b.y, 0);
+      }
+      const fan = new THREE.Mesh(new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)), laneMat);
+      fan.renderOrder = 1;
+      const outline = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ring.map(p => new THREE.Vector3(p.x, p.y, 0.004))), laneLine);
+      outline.renderOrder = 3;
+      lanes.add(fan, outline);
+    }
+  }
+
   return {
     group,
-    update(cov: Coverage, showMargin: boolean) {
+    update(cov: Coverage, P: Vec, showMargin: boolean) {
       setShapes(shadow, cov.shadow);
       setShapes(open, cov.open);
       shadow.visible = open.visible = !cov.noShot;
       tooTight.visible = showMargin && !cov.noShot;
+      buildLanes(cov, P);
     },
+    /** Lanes are switched by the Shot Cone toggle, and hidden in Puck's view, where they would fill the screen. */
+    set lanesVisible(v: boolean) { lanes.visible = v; },
   };
 }
