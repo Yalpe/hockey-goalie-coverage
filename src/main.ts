@@ -6,7 +6,7 @@ import { nameHoles } from './coverage/holes';
 import { goalieParts } from './coverage/parts';
 import { IN, PUCK_HALF_T } from './dims';
 import {
-  depthNow, DEPTH_SPOTS, lockToPost, moveGoalieTo, placeGoalie, quantHand, setDepth, setFacing, setHeightIn, setStance,
+  applyFollow, depthNow, DEPTH_SPOTS, lockToPost, moveGoalieTo, placeGoalie, quantHand, setDepth, setFacing, setHeightIn, setStance,
 } from './goalie';
 import { defaultHands, solvePose, type HandKey, type Pose } from './posing/posing';
 import { createCoverageLayer } from './scene/coverageLayer';
@@ -103,7 +103,8 @@ const gizmo = createHandGizmo({
   },
   onDragging: (on, w) => {
     orbit.enabled = !on;
-    if (!on) { settleHand(w); updatePose(); gizmo.show(w); }
+    if (on) stopSweep();
+    else { settleHand(w); updatePose(); gizmo.show(w); }
   },
 });
 
@@ -125,13 +126,19 @@ const gCard = goalieCard($('#goaliePanel'), {
   depthSpot: k => { setDepth(goalie, DEPTH_SPOTS[k]); updatePlacement(); },
   post: () => { lockToPost(goalie); updatePlacement(); },
   depthIn: n => { if (goalie.lock !== 'post') { setDepth(goalie, n * IN); updatePlacement(); } },
+  follow: on => { goalie.follow = on; updatePlacement(); },
 });
 $('[data-reset-hand]').addEventListener('click', () => {
   if (sel !== 'glove' && sel !== 'blocker') return;
   goalie[sel] = defaultHands(goalie.stance, goalie.catchSide)[sel];
   updatePose();
 });
-const map = cornerMap($<SVGSVGElement>('#cornerMap'), (x, z) => setPuck(x, z, true), () => {});
+const map = cornerMap($<SVGSVGElement>('#cornerMap'), {
+  grab: () => stopSweep(),
+  puck: (x, z) => setPuck(x, z, true),
+  goalie: p => dragGoalieTo(p),
+  turn: (p, pivot) => turnGoalieToward(p, pivot),
+});
 
 function renderCard() {
   const panel = sel === 'glove' || sel === 'blocker' ? 'hand' : sel ?? 'none';
@@ -172,6 +179,7 @@ function updatePose(keepHands = false) {
 
 /** The goalie moved or turned on the ice. Its pose and hulls stay as they are. */
 function updatePlacement() {
+  applyFollow(goalie, puck);
   const at = placeGoalie(goalie, pose);
   goalieRoot.position.set(at.x, 0, at.z);
   goalieRoot.rotation.y = at.facingDeg / DEG;
@@ -199,8 +207,61 @@ function updateCoverage() {
 function setPuck(x: number, z: number, refollow: boolean) {
   Object.assign(puck, clampPuck(x, z));
   puckMesh.group.position.set(puck.x, 0, puck.z);
-  updateCoverage();
+  if (goalie.follow) updatePlacement(); else updateCoverage();   // a following goalie squares up to the Puck
   if (refollow) refollowView();
+}
+
+// Moving or turning the goalie by hand: from the 3D view or the corner map. Either one switches Follow the Puck off.
+function followOff() {
+  if (!goalie.follow) return;
+  goalie.follow = false;
+  flash('Follow the Puck: off');
+}
+function dragGoalieTo(p: { x: number; z: number }) {
+  followOff();
+  const note = moveGoalieTo(goalie, pose, p);
+  if (note) flash(note);
+  updatePlacement();
+}
+/** Turns the goalie to face p. pivot: where it stood when the turn began. */
+function turnGoalieToward(p: { x: number; z: number }, pivot: { x: number; z: number }) {
+  followOff();
+  // On the arc the goalie slides round as it turns, and its knob stays on a circle round the middle of the goal
+  // line, so the angle is taken from there; that keeps the knob under the cursor. Elsewhere it turns on the spot.
+  const c = goalie.lock === 'arc' ? { x: 0, z: 0 } : pivot;
+  setFacing(goalie, Math.atan2(p.x - c.x, p.z - c.z) * DEG);
+  updatePlacement();
+}
+
+// ---------------- Puck spots and Sweep ----------------
+// +x is the goalie's left.
+const PUCK_SPOTS: [string, number, number][] = [
+  ['Slot', 0, 6], ['High slot', 0, 10.5], ['In tight', 0.4, 2.2], ["Dot (goalie's left)", 6.7, 6.1],
+  ["Sharp angle (goalie's right)", -3.2, 1.0], ["Point (goalie's left)", 7, 18], ['Behind the line', 1.5, -0.8],
+];
+const spotsEl = $('[data-puck-spots]');
+spotsEl.innerHTML = PUCK_SPOTS.map(([n], i) => `<button type="button" data-spot-i="${i}">${n}</button>`).join('');
+spotsEl.addEventListener('click', e => {
+  const i = (e.target as HTMLElement).closest<HTMLElement>('[data-spot-i]')?.dataset.spotI;
+  if (i === undefined) return;
+  stopSweep();
+  const [, x, z] = PUCK_SPOTS[Number(i)];
+  setPuck(x, z, true);
+});
+// Sweep: the Puck skates back and forth along an arc across the slot (6 m out, ±65°, a 7 s cycle) while everything
+// updates live. Grabbing anything stops it. It isn't part of the Setup.
+let sweepT0: number | null = null;
+const sweepBtn = $('[data-sweep]');
+function stopSweep() { sweepT0 = null; sweepBtn.textContent = '▶ Sweep across the slot'; }
+sweepBtn.addEventListener('click', () => {
+  if (sweepT0 !== null) return stopSweep();
+  sweepT0 = performance.now();
+  sweepBtn.textContent = '■ Stop sweep';
+});
+function sweepStep(now: number) {
+  if (sweepT0 === null) return;
+  const a = Math.sin((now - sweepT0) / 1000 * 2 * Math.PI / 7) * 65 / DEG;
+  setPuck(6 * Math.sin(a), 6 * Math.cos(a), true);
 }
 
 function renderMap() {
@@ -283,6 +344,7 @@ type Drag = { k: 'puck' } | { k: 'goalie'; off: { x: number; z: number } } | { k
 let drag: Drag | null = null, downAt: { x: number; y: number } | null = null;
 
 function grab(e: PointerEvent, d: Drag) {
+  stopSweep();
   drag = d;
   orbit.enabled = false;
   canvas.setPointerCapture(e.pointerId);
@@ -315,17 +377,8 @@ canvas.addEventListener('pointermove', e => {
   const p = icePoint();
   if (!p) return;
   if (drag.k === 'puck') setPuck(p.x, p.z, false);   // the camera follows on release
-  else if (drag.k === 'goalie') {
-    const note = moveGoalieTo(goalie, pose, { x: p.x + drag.off.x, z: p.z + drag.off.z });
-    if (note) flash(note);
-    updatePlacement();
-  } else {
-    // On the arc the goalie slides round as it turns, and its knob stays on a circle round the middle of the goal
-    // line, so the angle is taken from there; that keeps the knob under the cursor. Elsewhere it turns on the spot.
-    const c = goalie.lock === 'arc' ? { x: 0, z: 0 } : drag.pivot;
-    setFacing(goalie, Math.atan2(p.x - c.x, p.z - c.z) * DEG);
-    updatePlacement();
-  }
+  else if (drag.k === 'goalie') dragGoalieTo({ x: p.x + drag.off.x, z: p.z + drag.off.z });
+  else turnGoalieToward(p, drag.pivot);
 });
 canvas.addEventListener('pointerup', e => {
   if (drag) {
@@ -380,24 +433,44 @@ function saveNow() {
   clearTimeout(saveTimer);
   const h = '#' + encodeSetup(currentSetup());
   if (location.hash !== h) history.replaceState(null, '', h);
+  shareUrl.value = location.href;
 }
 function scheduleSave() {
   clearTimeout(saveTimer);
   saveTimer = window.setTimeout(saveNow, 250);
 }
 
-const nameInput = $<HTMLInputElement>('#setupName');
+// Sharing: a Share button top centre opens a small panel with the Setup's name, its link and Copy link. A named Setup
+// shows its name beside the button.
+const shareBtn = $('#shareBtn'), sharePanel = $('#sharePanel'), setupTitle = $('#setupTitle');
+const nameInput = $<HTMLInputElement>('#setupName'), shareUrl = $<HTMLInputElement>('#shareUrl');
 nameInput.maxLength = NAME_MAX;
-nameInput.value = setupName;
-nameInput.addEventListener('input', () => { setupName = nameInput.value.slice(0, NAME_MAX); scheduleSave(); });
-nameInput.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === 'Escape') nameInput.blur(); });
+
+function renderName() {
+  if (document.activeElement !== nameInput) nameInput.value = setupName;
+  setupTitle.textContent = setupName;
+  setupTitle.hidden = !setupName;
+}
+function openShare(open: boolean) {
+  sharePanel.hidden = !open;
+  shareBtn.setAttribute('aria-expanded', String(open));
+  if (open) { saveNow(); nameInput.focus(); }
+}
+shareBtn.addEventListener('click', () => openShare(sharePanel.hidden !== false));
+nameInput.addEventListener('input', () => { setupName = nameInput.value.slice(0, NAME_MAX); renderName(); scheduleSave(); });
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') nameInput.blur(); });
+shareUrl.addEventListener('focus', () => shareUrl.select());
+// Esc or a click anywhere else closes it.
+addEventListener('keydown', e => { if (e.key === 'Escape' && !sharePanel.hidden) { openShare(false); shareBtn.focus(); } });
+addEventListener('pointerdown', e => {
+  if (!sharePanel.hidden && !(e.target as Element).closest('#sharePanel, #shareBtn')) openShare(false);
+}, { capture: true });
 
 $('#copyLink').addEventListener('click', async () => {
   saveNow();
   try { await navigator.clipboard.writeText(location.href); }
   catch {   // no clipboard access (e.g. not https): fall back to the old way
-    const t = Object.assign(document.createElement('textarea'), { value: location.href });
-    document.body.append(t); t.select(); document.execCommand('copy'); t.remove();
+    shareUrl.select(); document.execCommand('copy');
   }
   flash('Link copied');
 });
@@ -408,11 +481,13 @@ function applySetup(s: Setup) {
   puckMesh.group.position.set(puck.x, 0, puck.z);
   Object.assign(goalie, s.goalie);
   Object.assign(show, s.show);
-  setupName = nameInput.value = s.name;
+  setupName = s.name;
+  renderName();
   select(null);
   updatePose();
   setView(s.view);
 }
+renderName();
 addEventListener('hashchange', () => {
   const r = readHash();
   applySetup(r.setup);
@@ -431,7 +506,8 @@ addEventListener('resize', resize);
 
 const puckTag = $('#puckTag');
 const tagAt = new THREE.Vector3();
-renderer.setAnimationLoop(() => {
+renderer.setAnimationLoop(now => {
+  sweepStep(now);
   renderer.render(scene, camera);
   // The "Puck" tag floats just above it whenever it's on screen. Placed after rendering, so it uses the same camera
   // matrices as the picture; before, it trailed the Puck by a frame while orbiting and flickered.

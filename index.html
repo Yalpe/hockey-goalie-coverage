@@ -8,10 +8,19 @@
 <body>
   <div id="view">
     <nav id="viewbar" aria-label="Views"></nav>
-    <div id="setupBar">
-      <input id="setupName" type="text" placeholder="Name this Setup…" aria-label="Setup name" spellcheck="false" autocomplete="off">
-      <button type="button" id="copyLink">Copy link</button>
+    <div id="shareBar">
+      <span id="setupTitle" hidden></span>
+      <button type="button" id="shareBtn" aria-expanded="false" aria-controls="sharePanel">Share</button>
     </div>
+    <section id="sharePanel" class="card" role="dialog" aria-label="Share this Setup" hidden>
+      <b class="title">Share this Setup</b>
+      <input id="setupName" type="text" placeholder="Name this Setup…" aria-label="Setup name" spellcheck="false" autocomplete="off">
+      <div class="row">
+        <input id="shareUrl" type="text" readonly aria-label="Link to this Setup">
+        <button type="button" id="copyLink">Copy link</button>
+      </div>
+      <div class="hint">The link opens exactly this Setup: goalie, hands, Puck, view and toggles.</div>
+    </section>
     <div id="labels" aria-label="Holes"></div>
     <div id="puckTag">Puck</div>
     <div id="youArePuck">Puck's view: looking over the Puck at the net</div>
@@ -27,7 +36,9 @@
       </div>
       <div data-panel="puck">
         <b class="title">Puck</b>
-        <div class="hint">Drag it on the ice by its orange ring. In Puck's view, drag it on the map instead.</div>
+        <div class="hint">Drag it on the ice by its orange ring. In Puck's view, drag it on the map instead. Or jump to a spot:</div>
+        <div class="btns wrap" data-puck-spots></div>
+        <div class="row"><button type="button" data-sweep>▶ Sweep across the slot</button></div>
       </div>
       <div data-panel="goalie" id="goaliePanel"></div>
       <div data-panel="hand">
@@ -42,7 +53,7 @@
         </div>
       </div>
     </section>
-    <span id="mapCap">From above: drag the Puck</span>
+    <span id="mapCap">From above: drag the Puck or the goalie</span>
     <svg id="cornerMap" aria-label="The zone from above"></svg>
   </div>
   <script type="module" src="/src/main.ts"></script>

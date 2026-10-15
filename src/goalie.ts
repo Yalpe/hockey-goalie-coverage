@@ -70,6 +70,19 @@ export function placeGoalie(g: GoalieSetup, pose: Pose): { x: number; z: number;
   return { ...g.pos, facingDeg: g.facingDeg };
 }
 
+/**
+ * Follow the Puck: square to the Puck and on its angle. On the arc that's just facing it (the arc does the rest);
+ * placed freely, the goalie keeps its distance and slides round onto the Puck's angle. RVH at the post stays put.
+ */
+export function applyFollow(g: GoalieSetup, puck: { x: number; z: number }) {
+  if (!g.follow || g.lock === 'post') return;
+  g.facingDeg = Math.round(clamp(Math.atan2(puck.x, Math.max(puck.z, 0.05)) * DEG, -80, 80));
+  if (g.lock === 'free') {
+    const r = Math.hypot(g.pos.x, g.pos.z), f = g.facingDeg / DEG;
+    g.pos = { x: cm(r * Math.sin(f)), z: cm(r * Math.cos(f)) };
+  }
+}
+
 /** Depth: how far out the toes are from the middle of the goal line. */
 export function depthNow(g: GoalieSetup, pose: Pose): number {
   return g.lock === 'arc' ? g.arcR : Math.hypot(g.pos.x, g.pos.z) + frontReach(pose);

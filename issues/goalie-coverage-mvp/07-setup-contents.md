@@ -55,6 +55,7 @@ Key names and code values are the builder's choice, kept short.
 - The address bar updates as the coach edits (debounced `history.replaceState`, per [Tech stack and hosting](03-tech-stack.md)).
 - The name is a caption at the top centre. When empty it shows "Name this Setup…" in grey; click it to type.
 - A **Copy link** button next to the caption copies the URL and flashes "Link copied".
+- **Amended 2026-10-15** (coach, after seeing slice 7): no name field on screen by default. A **Share** button at the top centre opens a small panel with the name ("Name this Setup…"), the link and **Copy link**; Esc or a click elsewhere closes it. A named Setup shows its name as a title beside the button.
 - Opening the page with no hash gives the default Setup.
 
 **Versioning.** For now there is only a `v1` decoder. An unknown version or a broken link opens the default Setup with the notice "This link couldn't be read", and the app doesn't crash. When a `v2` is ever needed, add one `v1 → v2` upgrade function then (a chain, so the app only works on the latest shape) and write links only in the latest version.

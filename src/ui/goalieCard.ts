@@ -13,6 +13,7 @@ export interface GoalieCardActions {
   depthSpot(k: DepthSpot): void;
   post(): void;
   depthIn(inches: number): void;
+  follow(on: boolean): void;
 }
 
 /** The goalie's controls in the bottom-left card: Stance, Catch Side, Height and Depth. */
@@ -44,8 +45,13 @@ export function goalieCard(el: HTMLElement, act: GoalieCardActions) {
       <span class="val" data-depth-val></span>
     </div>
     <div class="hint">Depth is how far the toes are out from the middle of the goal line.
-      − / + and the mouse wheel (over a slider, or anywhere while the goalie is selected) move 1 inch.</div>`;
+      − / + and the mouse wheel (over a slider, or anywhere while the goalie is selected) move 1 inch.</div>
+    <div class="row"><label></label>
+      <label class="check"><input type="checkbox" data-follow> Follow the Puck (square to it and on its angle)</label>
+    </div>`;
   const height = el.querySelector<HTMLInputElement>('#heightIn')!, depth = el.querySelector<HTMLInputElement>('#depthIn')!;
+  const follow = el.querySelector<HTMLInputElement>('[data-follow]')!;
+  follow.addEventListener('change', () => act.follow(follow.checked));
   let current: { g: GoalieSetup; depthM: number } | null = null;
   const heightNow = () => Math.round(current!.g.heightM / IN), depthNowIn = () => Math.round(current!.depthM / IN);
 
@@ -91,6 +97,8 @@ export function goalieCard(el: HTMLElement, act: GoalieCardActions) {
       el.querySelectorAll<HTMLButtonElement>('[data-depth]').forEach(b => b.disabled = g.lock === 'post');
       if (document.activeElement !== depth) depth.value = String(depthNowIn());
       el.querySelector('[data-depth-val]')!.textContent = g.lock === 'post' ? 'at the post' : depthText(depthM);
+      follow.checked = g.follow && g.lock !== 'post';
+      follow.disabled = g.lock === 'post';
     },
   };
 }

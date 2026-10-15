@@ -145,27 +145,38 @@ kbd {
 #coverageCard ol { margin: 8px 0 0; padding-left: 20px; font-size: 13px; font-variant-numeric: tabular-nums; }
 #coverageCard ol[hidden] { display: none; }
 
-/* Setup name caption and Copy link, top centre */
-#setupBar {
+/* Share: a button top centre (with the Setup's name beside it, when it has one), opening a small panel */
+#shareBar {
   position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6;
-  display: flex; gap: 6px; align-items: center;
+  display: flex; gap: 8px; align-items: center;
 }
-#setupName {
-  width: 220px; font: inherit; font-size: 16px; font-weight: 700; color: var(--ink); text-align: center;
-  background: rgba(255, 255, 255, .7); border: 1px solid transparent; border-radius: 8px; padding: 4px 10px;
+#setupTitle {
+  max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 15px; font-weight: 700; background: rgba(255, 255, 255, .75); padding: 4px 10px; border-radius: 8px;
 }
-#setupName::placeholder { color: #94a3b8; font-weight: 600; }
-#setupName:hover { border-color: var(--line); background: rgba(255, 255, 255, .9); }
-#setupName:focus { outline: none; border-color: var(--accent); background: #fff; }
-#copyLink {
+#setupTitle[hidden] { display: none; }
+#shareBtn {
   font: inherit; font-weight: 600; border: 1px solid var(--line); background: rgba(255, 255, 255, .94); color: var(--ink);
-  border-radius: 8px; padding: 5px 11px; cursor: pointer; box-shadow: 0 1px 4px rgba(0, 0, 0, .12); white-space: nowrap;
+  border-radius: 8px; padding: 5px 14px; cursor: pointer; box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
 }
-#copyLink:hover { border-color: var(--accent); }
-/* Narrower laptops: the caption drops a row so it clears the view buttons, and the notes under it move down. */
+#shareBtn:hover, #shareBtn[aria-expanded="true"] { border-color: var(--accent); }
+#sharePanel { top: 56px; left: 50%; transform: translateX(-50%); width: 400px; max-width: calc(100% - 24px); z-index: 8; }
+#sharePanel[hidden] { display: none; }
+#sharePanel input { font: inherit; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; color: var(--ink); }
+#setupName { display: block; width: 100%; font-weight: 600; margin: 6px 0 2px; }
+#setupName:focus, #shareUrl:focus { outline: none; border-color: var(--accent); }
+#shareUrl { flex: 1; min-width: 0; color: var(--muted); font-size: 12px; background: #f6f8fa; }
+#copyLink { font-weight: 600; white-space: nowrap; }
+#sharePanel .hint { color: var(--muted); font-size: 13px; margin: 2px 0 0; }
+
+/* Narrower laptops: the share bar drops a row so it clears the view buttons, and the notes under it move down. */
 @media (max-width: 1359px) {
-  #setupBar { top: 52px; }
+  #shareBar { top: 52px; }
+  #sharePanel { top: 96px; }
   #youArePuck { top: 96px; }
   #noShot { top: 128px; }
   #flash { top: 160px; }
 }
+#card label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; color: var(--ink); min-width: 0; }
+#card label.check input { accent-color: var(--accent); margin: 0; }
+#card .btns.wrap { margin-top: 4px; }
