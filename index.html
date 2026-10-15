@@ -13,7 +13,25 @@
     <div id="flash" role="status"></div>
     <div id="noShot" role="status">The Puck is on or behind the goal line: there is no shot.</div>
     <section id="coverageCard" aria-label="Coverage"></section>
-    <section id="goalieCard" class="card" aria-label="Goalie"></section>
+    <section id="card" class="card" aria-label="Selection">
+      <div data-panel="none">
+        <b class="title">Click something to change it</b>
+        <div class="hint">The <b>Puck</b> (orange ring), the <b>goalie</b>'s body, or a <b>hand</b>
+          (yellow ball = glove, blue = blocker). Drag the goalie or the Puck on the ice. Drag empty space to look around.</div>
+      </div>
+      <div data-panel="puck">
+        <b class="title">Puck</b>
+        <div class="hint">Drag it on the ice by its orange ring. In Puck's view, drag it on the map instead.</div>
+      </div>
+      <div data-panel="goalie" id="goaliePanel"></div>
+      <div data-panel="hand">
+        <b class="title" data-hand-title></b>
+        <div class="hint">Moving and turning the hands comes next.</div>
+        <div class="row"><button type="button" data-reset-hand>Reset this hand</button></div>
+      </div>
+    </section>
+    <span id="mapCap">From above: drag the Puck</span>
+    <svg id="cornerMap" aria-label="The zone from above"></svg>
   </div>
   <script type="module" src="/src/main.ts"></script>
 </body>

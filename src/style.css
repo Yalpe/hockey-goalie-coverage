@@ -80,7 +80,19 @@ html, body {
 .card input[type=range] { flex: 1; min-width: 80px; accent-color: var(--accent); }
 .card .val { min-width: 100px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
 
-#goalieCard { left: 12px; bottom: 12px; width: 420px; max-width: calc(100% - 24px); }
+#card { left: 12px; bottom: 12px; width: 430px; max-width: calc(100% - 24px); }
+#card .hint { color: var(--muted); font-size: 13px; margin: 2px 0 6px; }
+#card button:disabled { opacity: .4; cursor: default; border-color: var(--line); }
+
+/* Corner map (Puck's view only), bottom-right */
+#cornerMap {
+  position: absolute; right: 12px; bottom: 12px; z-index: 6; width: 300px; height: 290px; touch-action: none;
+  background: #f4f8fb; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, .15);
+}
+#mapCap {
+  position: absolute; right: 20px; bottom: 308px; z-index: 6; font-size: 12px; font-weight: 600; color: var(--muted);
+  background: rgba(255, 255, 255, .85); padding: 1px 6px; border-radius: 4px;
+}
 
 /* "% covered" card, top-right */
 #coverageCard {

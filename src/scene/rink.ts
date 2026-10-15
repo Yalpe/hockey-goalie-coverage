@@ -22,9 +22,9 @@ export const RINK = {
   boardH: 42 * IN,
 };
 
-type XZ = [number, number];
+export type XZ = [number, number];
 
-const DOTS: XZ[] = [[RINK.dotX, RINK.dotZ], [-RINK.dotX, RINK.dotZ]];
+export const DOTS: XZ[] = [[RINK.dotX, RINK.dotZ], [-RINK.dotX, RINK.dotZ]];
 
 /** Half-width of the ice at z: narrower in the corners. */
 export function rinkHalfW(z: number): number {
@@ -45,7 +45,7 @@ export const BOARDS: XZ[] = (() => {
 })();
 
 /** Hash marks: two each side of each end-zone circle, running out toward the boards and the slot. */
-const HASHES: [XZ, XZ][] = DOTS.flatMap(([x, z]) => [-1, 1].flatMap(sx => [-1, 1].map(sz => {
+export const HASHES: [XZ, XZ][] = DOTS.flatMap(([x, z]) => [-1, 1].flatMap(sx => [-1, 1].map(sz => {
   const hz = z + sz * RINK.hashGap / 2, x0 = x + sx * Math.sqrt(RINK.circleR ** 2 - (RINK.hashGap / 2) ** 2);
   return [[x0, hz], [x0 + sx * RINK.hashLen, hz]] as [XZ, XZ];
 })));
