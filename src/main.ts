@@ -10,8 +10,8 @@ import { VIEWS, viewPose, type ViewKey } from './views';
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 
 const view = $('#view');
-const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });   // painted lines sit millimetres above the ice
-renderer.setPixelRatio(devicePixelRatio);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));   // beyond 2× costs frame rate for no visible gain
 view.prepend(renderer.domElement);
 const canvas = renderer.domElement;
 
@@ -22,7 +22,7 @@ const sun = new THREE.DirectionalLight(0xffffff, 1.6);
 sun.position.set(3, 6, 5);
 scene.add(sun);
 
-const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 200);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
 const orbit = new OrbitControls(camera, canvas);
 
 scene.add(buildRink(), buildNet());
@@ -98,15 +98,16 @@ addEventListener('resize', resize);
 const puckTag = $('#puckTag');
 const tagAt = new THREE.Vector3();
 renderer.setAnimationLoop(() => {
-  // The "Puck" tag floats just above it whenever it's on screen.
+  renderer.render(scene, camera);
+  // The "Puck" tag floats just above it whenever it's on screen. Placed after rendering, so it uses the same camera
+  // matrices as the picture; before, it trailed the Puck by a frame while orbiting and flickered.
   tagAt.set(puck.x, 2 * PUCK_HALF_T, puck.z).project(camera);
   const tagVis = tagAt.z < 1 && Math.abs(tagAt.x) < 1 && Math.abs(tagAt.y) < 1;
   puckTag.style.display = tagVis ? 'block' : 'none';
   if (tagVis) {
-    puckTag.style.left = `${(tagAt.x + 1) / 2 * canvas.clientWidth}px`;
-    puckTag.style.top = `${(1 - tagAt.y) / 2 * canvas.clientHeight - 14}px`;
+    const x = (tagAt.x + 1) / 2 * canvas.clientWidth, y = (1 - tagAt.y) / 2 * canvas.clientHeight - 14;
+    puckTag.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -100%)`;
   }
-  renderer.render(scene, camera);
 });
 
 resize();

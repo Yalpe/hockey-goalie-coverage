@@ -36,8 +36,8 @@ html, body {
 
 /* The Puck's label, which floats over it */
 #puckTag {
-  position: absolute; z-index: 4; pointer-events: none; white-space: nowrap;
-  transform: translate(-50%, -100%);
+  position: absolute; left: 0; top: 0; z-index: 4; pointer-events: none; white-space: nowrap;
+  will-change: transform;   /* moved every frame from main.ts */
   background: var(--puck); color: #fff; font-weight: 700; font-size: 12px;
   padding: 1px 8px; border-radius: 10px;
 }

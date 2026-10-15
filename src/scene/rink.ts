@@ -52,41 +52,54 @@ const HASHES: [XZ, XZ][] = DOTS.flatMap(([x, z]) => [-1, 1].flatMap(sx => [-1, 1
 
 const COLORS = { ice: 0xf4f8fb, red: 0xc8102e, blue: 0x1d4ed8, crease: 0x9fc6ea, kick: 0xf5c518, board: 0xf8fafc, cap: 0xd7262e };
 
-const mat = (color: number) => new THREE.MeshStandardMaterial({ color, roughness: 0.7 });
+// Ice paint goes on in layers. A polygon offset per layer keeps each one cleanly on top of the one under it at any
+// distance, without lifting it off the ice (which flickers from far away and floats when seen up close).
+const ICE = 0, CREASE_FILL = 1, LINES = 2, DOTS_ON_TOP = 3;
+const paints = new Map<string, THREE.Material>();
+function paint(color: number, layer: number): THREE.Material {
+  const key = `${color}/${layer}`;
+  let m = paints.get(key);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({
+      color, roughness: 0.7, polygonOffset: layer > 0, polygonOffsetFactor: -layer, polygonOffsetUnits: -4 * layer,
+    });
+    paints.set(key, m);
+  }
+  return m;
+}
 
 export function buildRink(): THREE.Group {
   const g = new THREE.Group();
   g.name = 'rink';
 
-  // Flat things on the ice. Each layer sits a hair higher than the one under it so they don't flicker.
-  const flat = (geo: THREE.BufferGeometry, color: number, y: number, x = 0, z = 0) => {
-    const m = new THREE.Mesh(geo, mat(color));
+  const flat = (geo: THREE.BufferGeometry, color: number, layer: number, x = 0, z = 0) => {
+    const m = new THREE.Mesh(geo, paint(color, layer));
     m.rotation.x = -Math.PI / 2;
-    m.position.set(x, y, z);
+    m.position.set(x, 0, z);
     g.add(m);
     return m;
   };
   // A painted line of width w from (x0, z0) to (x1, z1).
-  const strip = (x0: number, z0: number, x1: number, z1: number, w: number, color: number, y = 0.0006) => {
-    const m = flat(new THREE.PlaneGeometry(Math.hypot(x1 - x0, z1 - z0), w), color, y, (x0 + x1) / 2, (z0 + z1) / 2);
+  const strip = (x0: number, z0: number, x1: number, z1: number, w: number, color: number) => {
+    const m = flat(new THREE.PlaneGeometry(Math.hypot(x1 - x0, z1 - z0), w), color, LINES, (x0 + x1) / 2, (z0 + z1) / 2);
     m.rotation.set(-Math.PI / 2, 0, Math.atan2(-(z1 - z0), x1 - x0));   // turn in the ice plane, then lay flat
   };
   // Shapes are drawn in (x, -z) because laying a shape flat maps its +y onto -z.
   const iceShape = new THREE.Shape(BOARDS.map(([x, z]) => new THREE.Vector2(x, -z)));
-  flat(new THREE.ShapeGeometry(iceShape), COLORS.ice, -0.001);
+  flat(new THREE.ShapeGeometry(iceShape), COLORS.ice, ICE);
 
   strip(-rinkHalfW(0), -LINE_W / 2, rinkHalfW(0), -LINE_W / 2, LINE_W, COLORS.red);                                  // goal line
   strip(-RINK.halfW, RINK.blueZ + RINK.blueW / 2, RINK.halfW, RINK.blueZ + RINK.blueW / 2, RINK.blueW, COLORS.blue); // blue line
   for (const [x, z] of DOTS) {
-    flat(new THREE.RingGeometry(RINK.circleR - LINE_W, RINK.circleR, 96), COLORS.red, 0.0006, x, z);
-    flat(new THREE.CircleGeometry(RINK.dotR, 32), COLORS.red, 0.0007, x, z);
+    flat(new THREE.RingGeometry(RINK.circleR - LINE_W, RINK.circleR, 96), COLORS.red, LINES, x, z);
+    flat(new THREE.CircleGeometry(RINK.dotR, 32), COLORS.red, DOTS_ON_TOP, x, z);
   }
   for (const [[x0, z0], [x1, z1]] of HASHES) strip(x0, z0, x1, z1, LINE_W, COLORS.red);
-  for (const x of [RINK.dotX, -RINK.dotX]) flat(new THREE.CircleGeometry(RINK.dotR, 32), COLORS.red, 0.0007, x, RINK.nzDotZ);
+  for (const x of [RINK.dotX, -RINK.dotX]) flat(new THREE.CircleGeometry(RINK.dotR, 32), COLORS.red, DOTS_ON_TOP, x, RINK.nzDotZ);
 
   // Crease: a 6 ft semicircle, light blue inside a red line.
-  flat(new THREE.CircleGeometry(CREASE_RADIUS, 48, Math.PI, Math.PI), COLORS.crease, 0.0005);
-  flat(new THREE.RingGeometry(CREASE_RADIUS - LINE_W, CREASE_RADIUS, 64, 1, Math.PI, Math.PI), COLORS.red, 0.0007);
+  flat(new THREE.CircleGeometry(CREASE_RADIUS, 48, Math.PI, Math.PI), COLORS.crease, CREASE_FILL);
+  flat(new THREE.RingGeometry(CREASE_RADIUS - LINE_W, CREASE_RADIUS, 64, 1, Math.PI, Math.PI), COLORS.red, DOTS_ON_TOP);
 
   g.add(buildBoards());
   return g;
