@@ -3,6 +3,7 @@
 // Frame: origin on the ice under the goalie's pelvis; +y up; +z = the goalie's forward; +x = the goalie's LEFT.
 // Hand targets are fractions of height H: { out: sideways away from centreline, up: above ice, fwd: ahead }.
 import { CREASE_RADIUS, IN, MOUTH_HALF_W, POST_R } from '../dims';
+import { gearFor } from './gear';
 import { add, clamp, cross, dot, FWD, len, mul, norm, sub, UP, V, type Vec } from './vec';
 
 export type StanceKey = 'standup' | 'butterfly' | 'rvhL' | 'rvhR';
@@ -25,19 +26,21 @@ export interface PoseSetup {
 
 export type Dims = ReturnType<typeof goalieDims>;
 
+// H is barefoot height. The body comes from Winter's ratios (research 01 §4.1); the gear from a stepped table of
+// typical retail sizes by height (research 03 §6, see gear.ts).
 export function goalieDims(H: number) {
-  const g = clamp(H / 1.83, 0.6, 1);
+  const gear = gearFor(H / IN), kneeRef = 0.285 * H + 0.1016;   // knee above ice, on skates
   return {
-    H, g,
+    H, band: gear.band,
     thigh: 0.245 * H, shank: 0.246 * H, upperArm: 0.186 * H, forearm: 0.146 * H,
     torso: 0.288 * H, shoulderHalf: 0.1295 * H, hipHalf: 0.06 * H,
     ankleH: 0.039 * H + 0.1016,                       // ankle above ice incl. skate lift
-    padTop: 0.395 * H + 0.1016, kneeRef: 0.285 * H + 0.1016,
-    padWidth: clamp(0.155 * H, 0.20, 0.2794), padDepth: 0.09 * H, // depth simplified (shin, not knee stack)
-    blocker: { w: g * 8 * IN, l: g * 15 * IN },
-    glove: { w: g * 10.5 * IN, h: g * 17.5 * IN },
-    blade: { l: (H >= 1.70 ? 1 : g) * 15.5 * IN, h: 3.5 * IN },
-    paddle: { l: clamp(0.37 * H / IN, 18, 26) * IN, w: (g < 0.8 ? 3 : 3.5) * IN },
+    padTop: kneeRef + gear.kneeToTop * IN, kneeRef,   // the pad top sits a chart distance above the knee
+    padWidth: gear.padWidth * IN, padDepth: 0.09 * H, // depth simplified (shin, not knee stack)
+    blocker: { w: gear.blocker.w * IN, l: gear.blocker.l * IN },
+    glove: { w: gear.glove.w * IN, h: gear.glove.h * IN },
+    blade: { l: gear.blade.l * IN, h: gear.blade.w * IN },
+    paddle: { l: gear.paddle * IN, w: gear.blade.w * IN },
     stickLen: Math.min(1.397, 0.75 * H),
   };
 }
