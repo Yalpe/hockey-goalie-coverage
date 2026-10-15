@@ -180,3 +180,4 @@ kbd {
 #card label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; color: var(--ink); min-width: 0; }
 #card label.check input { accent-color: var(--accent); margin: 0; }
 #card .btns.wrap { margin-top: 4px; }
+#card .row > label:first-child small { display: block; font-size: 11px; line-height: 1.1; color: #94a3b8; }

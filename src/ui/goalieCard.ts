@@ -28,7 +28,7 @@ export function goalieCard(el: HTMLElement, act: GoalieCardActions) {
     <div class="row"><label>Catches</label><span class="btns">
       <button type="button" data-catch="left">Left</button><button type="button" data-catch="right">Right</button>
     </span></div>
-    <div class="row"><label for="heightIn">Height</label>
+    <div class="row"><label for="heightIn">Height<small title="Skates add about 4 in on the ice">barefoot</small></label>
       <button type="button" class="step" data-height="-1" title="1 inch shorter">−</button>
       <input id="heightIn" type="range" min="${HEIGHT_MIN_IN}" max="${HEIGHT_MAX_IN}" step="1">
       <button type="button" class="step" data-height="1" title="1 inch taller">+</button>
