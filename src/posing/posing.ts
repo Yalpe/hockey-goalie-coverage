@@ -82,8 +82,8 @@ export const STANCES: Record<StanceKey, StanceDef> = {
 };
 export const STANCE_KEYS = Object.keys(STANCES) as StanceKey[];
 
-// RVH at its own post: where the goalie's root goes so the post-leg ankle sits at the post, with the flat pad
-// standing on edge just in front of the goal line. The post is between the pad and the skate toe.
+// RVH at its own post: where the goalie's root goes so the end of the post pad sits at the post, the pad standing
+// on edge just in front of the goal line and running along it from the post toward the middle of the net.
 // Top of the crease: the goalie stands on the crease arc, toes on the edge of the blue paint. Upright skates count
 // at their toes; in a kneeling Stance, the front edge of whatever pad is on the ice counts instead.
 export function frontReach(pose: Pose): number {
@@ -170,6 +170,10 @@ export interface PadBox { center: Vec; u: Vec; n: Vec; len: number; width: numbe
 
 // A pad is two boxes: the shin part (boot to knee roll) and the thigh rise, which follows the thigh up from the knee.
 const KNEE_ROLL = 0.04;
+/** The end of the pad's boot, on its axis: past the ankle by the skate's height, so the boot covers the skate. */
+function bootEnd(d: Dims, knee: Vec, ankle: Vec): Vec {
+  return sub(ankle, mul(norm(sub(knee, ankle)), d.ankleH - 0.01));
+}
 // face: the pad face direction (default straight ahead).
 function padBoxes(d: Dims, hip: Vec, knee: Vec, ankle: Vec, face: Vec = FWD): PadBox[] {
   const box = (from: Vec, dir: Vec, l: number, width: number, depth: number): PadBox => {
@@ -177,7 +181,7 @@ function padBoxes(d: Dims, hip: Vec, knee: Vec, ankle: Vec, face: Vec = FWD): Pa
     return { center: add(add(from, mul(dir, l / 2)), mul(n, depth / 2 - 0.04)), u: dir, n, len: l, width, depth };
   };
   const u = norm(sub(knee, ankle));                        // up the shin
-  const bottom = sub(ankle, mul(u, d.ankleH - 0.01));      // boot over the skate
+  const bottom = bootEnd(d, knee, ankle);
   const shin = box(bottom, u, len(sub(knee, bottom)) + KNEE_ROLL, d.padWidth, d.padDepth);
   const rise = box(knee, norm(sub(hip, knee)), d.padTop - d.kneeRef, 0.6 * d.padWidth, 0.8 * d.padDepth);
   return [shin, rise];
@@ -230,7 +234,7 @@ export interface Pose {
   glove: Hand;
   blocker: Hand;
   stick: Stick;
-  /** RVH only: the post-leg ankle on the ice, which goes against the post. */
+  /** RVH only: the end of the post-leg pad, on the ice, which goes against the post. */
   postAnchor: Vec | null;
 }
 
@@ -280,9 +284,11 @@ export function solvePose(setup: PoseSetup, clamps: Clamps = DEFAULT_CLAMPS): Po
     return { ...l, hip, knee: add(l.knee, lift), ankle: add(l.ankle, lift), pads: l.pads.map(b => ({ ...b, center: add(b.center, lift) })) };
   });
   const pelvis = lift;
-  // RVH: the post-leg ankle (between pad boot and skate toe) is what sits against the post.
+  // RVH: the end of the post-leg pad's boot is what goes against the post. (Anchoring the ankle instead left the
+  // boot, which reaches a skate's height past the ankle, sticking out past the post.)
   const postLeg = st.post ? legs.find(l => l.side === st.post)! : null;
-  const postAnchor = postLeg ? V(postLeg.ankle.x, 0, postLeg.ankle.z) : null;
+  const boot = postLeg ? bootEnd(d, postLeg.knee, postLeg.ankle) : null;
+  const postAnchor = boot ? V(boot.x, 0, boot.z) : null;
 
   const lean = st.lean * Math.PI / 180, sl = (st.sideLean || 0) * Math.PI / 180;
   const torsoDir = norm(V((st.post || 0) * Math.sin(sl), Math.cos(lean), Math.sin(lean)));
