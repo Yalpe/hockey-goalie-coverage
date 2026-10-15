@@ -1,0 +1,61 @@
+:root {
+  --accent: #c8102e;
+  --ink: #1b2430;
+  --muted: #5f6b7a;
+  --line: #dde3ea;
+  --puck: #f97316;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink);
+  background: #dfe8ef;
+}
+
+#view { position: fixed; inset: 0; overflow: hidden; }
+#view canvas { display: block; }
+
+/* View presets, top-left */
+#viewbar {
+  position: absolute; top: 12px; left: 12px; z-index: 5;
+  display: flex; gap: 6px; flex-wrap: wrap;
+  max-width: calc(100% - 280px);
+}
+#viewbar button {
+  font: inherit; font-weight: 600;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, .94); color: var(--ink);
+  border-radius: 8px; padding: 5px 11px; cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, .12);
+}
+#viewbar button:hover { border-color: var(--accent); }
+#viewbar button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* The Puck's label, which floats over it */
+#puckTag {
+  position: absolute; z-index: 4; pointer-events: none; white-space: nowrap;
+  transform: translate(-50%, -100%);
+  background: var(--puck); color: #fff; font-weight: 700; font-size: 12px;
+  padding: 1px 8px; border-radius: 10px;
+}
+#puckTag::after {
+  content: ''; position: absolute; left: 50%; top: 100%; transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: var(--puck);
+}
+
+#youArePuck {
+  position: absolute; top: 58px; left: 50%; transform: translateX(-50%); z-index: 4; pointer-events: none;
+  background: rgba(249, 115, 22, .92); color: #fff; font-weight: 600; font-size: 12px;
+  padding: 2px 10px; border-radius: 10px; display: none;
+}
+
+#flash {
+  position: absolute; top: 110px; left: 50%; transform: translateX(-50%); z-index: 7; pointer-events: none;
+  background: #0f172a; color: #fff; font-weight: 600;
+  padding: 6px 14px; border-radius: 8px;
+  opacity: 0; transition: opacity .4s;
+}
+#flash.show { opacity: 1; transition: none; }
