@@ -1,0 +1,1400 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PROTOTYPE — Coach controls</title>
+<!-- THROWAWAY PROTOTYPE for the "Coach controls on laptop" ticket.
+     Three radically different ways for a coach on a laptop to drive the scene, switchable via ?variant=A|B|C and the
+     black bar at the bottom ([ and ] keys: the arrow keys belong to variant C). The coverage drawing is the decided one
+     (variant D of the coverage prototype). The POSING and COVERAGE MODULES are copied unchanged from coverage-prototype.html.
+     A: Grab it in 3D (select + drag in the scene, inspector card, gizmo on the hands, corner map in Puck's view)
+     B: Control panel + rink map (the 3D view is only for looking; everything is a form control or the top-down map)
+     C: Tools + keyboard (pick a tool, drag anywhere / wheel / arrow keys act on it, number keys for views) -->
+<style>
+  :root { --accent:#c8102e; --ink:#1b2430; --muted:#5f6b7a; --line:#dde3ea; --bg:#f6f8fa; --warn:#b45309; --ok:#15803d; }
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif; color:var(--ink); background:var(--bg); }
+  #app { display:grid; grid-template-columns:1fr; height:100vh; }
+  body.v-B #app { grid-template-columns:380px 1fr; }
+  body:not(.v-A) .only-A, body:not(.v-B) .only-B, body:not(.v-C) .only-C, body.v-C .not-C { display:none !important; }
+  #view { position:relative; overflow:hidden; }
+  #view canvas { display:block; }
+  h1 { font-size:17px; margin:0 0 4px; }
+  .tag { display:inline-block; font-size:11px; font-weight:700; letter-spacing:.06em; color:#fff; background:var(--accent); padding:1px 6px; border-radius:3px; margin-bottom:6px; }
+  .hint { color:var(--muted); margin:2px 0 6px; font-size:13px; }
+  h2 { font-size:12px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); margin:14px 0 6px; border-top:1px solid var(--line); padding-top:10px; }
+  h3 { font-size:13px; margin:8px 0 2px; }
+  .row { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin:5px 0; }
+  .row > label:first-child { min-width:96px; color:var(--muted); }
+  button { font:inherit; border:1px solid var(--line); background:#fff; border-radius:6px; padding:3px 9px; cursor:pointer; }
+  button:hover:not(:disabled) { border-color:var(--accent); }
+  button:disabled { opacity:.4; cursor:default; }
+  button.on { background:var(--accent); color:#fff; border-color:var(--accent); }
+  input[type=range] { flex:1; min-width:80px; }
+  .val { min-width:52px; text-align:right; font-variant-numeric:tabular-nums; color:var(--muted); }
+  kbd { font:11px ui-monospace,Consolas,monospace; background:#eef2f6; border:1px solid #cbd5e1; border-bottom-width:2px; border-radius:4px; padding:0 4px; color:var(--ink); }
+  button.on kbd { background:rgba(255,255,255,.2); color:#fff; border-color:rgba(255,255,255,.4); }
+  .card { position:absolute; background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px 12px; box-shadow:0 6px 20px rgba(0,0,0,.15); z-index:6; }
+
+  #viewbar { position:absolute; top:12px; left:12px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; z-index:5; max-width:calc(100% - 300px); }
+  #viewbar .toggles { background:rgba(255,255,255,.85); border-radius:6px; padding:2px 8px; font-size:13px; }
+  #labels { position:absolute; inset:0; pointer-events:none; z-index:4; }
+  .lbl { position:absolute; transform:translate(-50%,-50%); background:rgba(21,128,61,.94); color:#fff; font-weight:600; font-size:12px; padding:2px 7px; border-radius:10px; white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,.3); }
+  .note { position:absolute; top:60px; left:50%; transform:translateX(-50%); background:#fff7ed; border:1px solid #fdba74; color:#9a3412; padding:6px 12px; border-radius:8px; z-index:5; display:none; font-weight:600; }
+  body.v-C .note { top:100px; }
+  #flash { position:absolute; top:110px; left:50%; transform:translateX(-50%); background:#0f172a; color:#fff; padding:6px 14px; border-radius:8px; z-index:7; opacity:0; transition:opacity .4s; pointer-events:none; font-weight:600; }
+  #flash.show { opacity:1; transition:none; }
+  #warn { position:absolute; bottom:132px; left:50%; transform:translateX(-50%); background:#fff7ed; border:1px solid #fdba74; color:#9a3412; padding:4px 12px; border-radius:8px; z-index:7; font-weight:600; display:none; white-space:nowrap; }
+
+  #puckTag { position:absolute; transform:translate(-50%,-100%); background:#f97316; color:#fff; font-weight:700; font-size:12px; padding:1px 8px; border-radius:10px; z-index:4; pointer-events:none; white-space:nowrap; }
+  #puckTag::after { content:''; position:absolute; left:50%; top:100%; transform:translateX(-50%); border:5px solid transparent; border-top-color:#f97316; }
+  #youArePuck { position:absolute; top:58px; left:50%; transform:translateX(-50%); background:rgba(249,115,22,.92); color:#fff; font-weight:600; font-size:12px; padding:2px 10px; border-radius:10px; z-index:4; pointer-events:none; display:none; }
+
+  body.v-C #youArePuck { top:100px; }
+
+  /* Coverage card (decided in the coverage prototype) */
+  #hud { position:absolute; top:12px; right:12px; z-index:5; background:rgba(15,23,42,.88); color:#fff; border-radius:12px; padding:12px 16px; min-width:210px; }
+  body.v-C #hud { top:60px; }
+  #hud .big { font-size:44px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  #hud .big small { font-size:16px; font-weight:600; opacity:.8; margin-left:4px; }
+  #hud .bar { height:10px; background:#22c55e; border-radius:5px; margin:10px 0 6px; overflow:hidden; }
+  #hud .bar div { height:100%; background:#334155; }
+  #hud .sub2 { font-size:13px; opacity:.85; }
+  #hud ol { margin:8px 0 0; padding-left:20px; font-size:13px; font-variant-numeric:tabular-nums; }
+
+  /* A: inspector + corner map */
+  #inspA { left:12px; bottom:12px; width:400px; }
+  #inspA b.title { display:block; font-size:15px; margin-bottom:4px; }
+  #insetA { position:absolute; right:12px; bottom:12px; width:300px; height:290px; background:#f4f8fb; border:1px solid var(--line); border-radius:12px; box-shadow:0 6px 20px rgba(0,0,0,.15); z-index:6; touch-action:none; }
+  #insetCap { position:absolute; right:20px; bottom:308px; z-index:6; font-size:12px; font-weight:600; color:var(--muted); background:rgba(255,255,255,.85); padding:1px 6px; border-radius:4px; }
+
+  /* B: panel */
+  #panelB { overflow-y:auto; padding:16px 16px 70px; background:#fff; border-right:1px solid var(--line); }
+  #mapB { width:100%; height:270px; border:1px solid var(--line); border-radius:8px; background:#f4f8fb; display:block; touch-action:none; }
+  #panelB fieldset { border:1px solid var(--line); border-radius:8px; padding:4px 10px 6px; margin:6px 0; }
+  #panelB legend { font-weight:700; padding:0 4px; }
+
+  /* C: top bar, tool bar, legend */
+  #topbarC { position:absolute; top:0; left:0; right:0; background:rgba(255,255,255,.96); border-bottom:1px solid var(--line); padding:6px 10px; display:flex; gap:14px; flex-wrap:wrap; z-index:6; align-items:center; }
+  #topbarC .grp { display:flex; gap:4px; align-items:center; }
+  #topbarC .grp > span.k { color:var(--muted); font-size:12px; margin-right:2px; }
+  #toolbarC { position:absolute; bottom:64px; left:50%; transform:translateX(-50%); display:flex; gap:6px; padding:6px; z-index:6; }
+  #toolbarC button { display:flex; flex-direction:column; align-items:center; gap:2px; min-width:84px; padding:6px 10px; font-weight:600; }
+  #legendC { left:12px; bottom:12px; width:320px; font-size:13px; }
+  #legendC ul { margin:4px 0 0; padding-left:18px; }
+  #legendC li { margin:2px 0; }
+  #legendC .always { color:var(--muted); margin-top:6px; border-top:1px solid var(--line); padding-top:6px; }
+
+  /* Prototype chrome: deliberately not part of the design being judged */
+  #switcher { position:fixed; bottom:14px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:4px; background:#111; color:#fff; border-radius:999px; padding:5px 6px; box-shadow:0 4px 16px rgba(0,0,0,.35); z-index:20; font-size:13px; }
+  #switcher button { background:#333; color:#fff; border:none; border-radius:999px; min-width:30px; height:30px; padding:0 8px; font-size:15px; }
+  #switcher button:hover { background:#555; }
+  #switcher span { padding:0 12px; min-width:250px; text-align:center; }
+  #drawer { position:fixed; bottom:62px; left:50%; transform:translateX(-50%); width:480px; max-height:62vh; overflow:auto; background:#111; color:#e5e7eb; border-radius:12px; padding:12px 16px; font-size:13px; z-index:21; display:none; box-shadow:0 8px 30px rgba(0,0,0,.4); }
+  #drawer h4 { margin:0 0 6px; color:#fff; }
+  #drawer li { margin:4px 0; }
+  #drawer pre { margin:0; font:12px/1.4 ui-monospace,Consolas,monospace; white-space:pre-wrap; color:#d1fae5; }
+  #perf { color:#9ca3af; font:12px ui-monospace,Consolas,monospace; margin-top:8px; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+  "clipper2-ts": "https://cdn.jsdelivr.net/npm/clipper2-ts@2.0.1-18/dist/clipper2.min.mjs"
+} }
+</script>
+</head>
+<body class="v-A">
+<div id="app">
+  <aside id="panelB" class="only-B">
+    <span class="tag">PROTOTYPE</span>
+    <h1>B · Control panel + rink map</h1>
+    <p class="hint">The 3D view is only for looking (drag it to orbit). Everything is changed here.</p>
+    <h2>Rink, from above</h2>
+    <p class="hint">Drag the Puck or the goalie. Drag the white knob in front of the goalie to turn it.</p>
+    <svg id="mapB"></svg>
+    <h2>Puck</h2>
+    <div class="row puckSpots"></div>
+    <div class="row"><button data-sweep>▶ Sweep across the slot</button></div>
+    <h2>Goalie</h2>
+    <div class="row"><label>Stance</label><span class="row stances" style="margin:0"></span></div>
+    <div class="row"><label>Catches</label><button data-catch="left">Left</button><button data-catch="right">Right</button></div>
+    <div class="row"><label>Height</label><input class="heightIn" type="range" min="1.0922" max="2.0066" step="0.0254"><span class="val heightVal"></span></div>
+    <div class="row"><label>Position</label><button data-arc="top">Top of crease</button><button data-arc="mid">Mid</button><button data-arc="deep">Deep</button><button data-post>At the post</button></div>
+    <div class="row"><label></label><label style="min-width:0"><input class="followBox" type="checkbox"> Follow the Puck (square and on angle)</label></div>
+    <div class="row"><label>Facing</label><input class="facingIn" type="range" min="-90" max="90" step="1"><span class="val facingVal"></span></div>
+    <h2>Hands</h2>
+    <fieldset><legend>Glove</legend><div id="sl-glove"></div></fieldset>
+    <fieldset><legend>Blocker (and stick)</legend><div id="sl-blocker"></div></fieldset>
+    <div class="row"><button data-reset-hand="all">Reset both hands</button></div>
+  </aside>
+  <div id="view">
+    <div id="viewbar" class="not-C">
+      <button data-view="puck">Puck's view</button>
+      <button data-view="shooter">Shooter's view</button>
+      <button data-view="top">Top-down</button>
+      <button data-view="behind">Behind net</button>
+      <button data-view="orbit">Free orbit</button>
+      <span class="toggles"><label><input class="showCone" type="checkbox"> Shot Cone</label> <label><input class="showMargin" type="checkbox"> Puck-size margin</label></span>
+    </div>
+
+    <div id="topbarC" class="only-C">
+      <span class="tag" style="margin:0">PROTOTYPE · C</span>
+      <span class="grp"><span class="k"><kbd>S</kbd></span><span class="stances grp"></span></span>
+      <span class="grp"><span class="k"><kbd>C</kbd> catches</span><button data-catch="left">L</button><button data-catch="right">R</button></span>
+      <span class="grp"><span class="k">height</span><input class="heightIn" type="range" min="1.0922" max="2.0066" step="0.0254" style="width:90px;flex:none"><span class="heightVal val"></span></span>
+      <label class="grp"><input class="followBox" type="checkbox"> <kbd>F</kbd> follow the Puck</label>
+      <span class="grp">
+        <button data-view="puck"><kbd>1</kbd> Puck</button><button data-view="shooter"><kbd>2</kbd> Shooter</button><button data-view="top"><kbd>3</kbd> Top</button><button data-view="behind"><kbd>4</kbd> Behind</button><button data-view="orbit"><kbd>5</kbd> Orbit</button>
+      </span>
+      <span class="grp" style="font-size:13px"><label><input class="showCone" type="checkbox"> Shot Cone</label> <label><input class="showMargin" type="checkbox"> margin</label></span>
+    </div>
+
+    <div id="labels"></div>
+    <div class="note" id="noShot">The Puck is on or behind the goal line: no Shot Cone.</div>
+    <div id="flash"></div>
+    <div id="warn"></div>
+    <div id="puckTag">Puck</div>
+    <div id="youArePuck">Puck's view: looking over the Puck at the net</div>
+    <div id="hud"><div class="big"><span id="hPct">–</span><small>covered</small></div><div class="bar"><div id="hBar"></div></div><div class="sub2" id="hSub"></div><div id="hList"></div></div>
+
+    <div id="inspA" class="card only-A">
+      <div data-insp="none">
+        <b class="title">Click something to change it</b>
+        <div class="hint" style="margin:0">The <b>Puck</b> (orange ring), the <b>goalie</b>'s body, or a <b>hand</b> (yellow ball = glove, blue = blocker). Drag the goalie or the Puck on the ice. Drag empty space to orbit.</div>
+      </div>
+      <div data-insp="puck">
+        <b class="title">Puck</b>
+        <div class="hint">Drag it on the ice, or jump to a spot.</div>
+        <div class="row puckSpots"></div>
+        <div class="row"><button data-sweep>▶ Sweep across the slot</button></div>
+      </div>
+      <div data-insp="goalie">
+        <b class="title">Goalie</b>
+        <div class="hint">Drag the body to move it: it snaps to the top of the crease, and in RVH to its post. Drag the dark knob on the ring to turn.</div>
+        <div class="row"><label>Stance</label><span class="row stances" style="margin:0"></span></div>
+        <div class="row"><label>Catches</label><button data-catch="left">Left</button><button data-catch="right">Right</button></div>
+        <div class="row"><label>Height</label><button data-step="height" data-dir="-1" title="1 inch shorter">−</button><input class="heightIn" type="range" min="1.0922" max="2.0066" step="0.0254"><button data-step="height" data-dir="1" title="1 inch taller">+</button><span class="val heightVal" style="min-width:96px"></span></div>
+        <div class="row"><label>Depth</label><button data-arc="top">Top of crease</button><button data-arc="mid">Mid</button><button data-arc="deep">Deep</button><button data-post>Post</button></div>
+        <div class="row"><label></label><button data-step="depth" data-dir="-1" title="1 inch deeper">−</button><input class="depthIn" type="range" min="0.6096" max="3.9878" step="0.0254"><button data-step="depth" data-dir="1" title="1 inch further out">+</button><span class="val depthVal" style="min-width:96px"></span></div>
+        <div class="hint" style="margin-top:0">Toes from the middle of the goal line. − / + and the mouse wheel (over the slider or the goalie) move 1 inch.</div>
+        <div class="row"><label></label><label style="min-width:0"><input class="followBox" type="checkbox"> Follow the Puck (square and on angle)</label></div>
+      </div>
+      <div data-insp="hand">
+        <b class="title" id="inspHandTitle"></b>
+        <div class="hint">The arrows follow the shot: one runs along the line from the Puck through the hand (depth), the others move it across and up/down. <b>Mouse wheel</b> = depth along the shot (handy in Puck's view, where that arrow points at you). Rings turn, tilt and twist. <kbd>W</kbd> move · <kbd>E</kbd> rotate · <kbd>Esc</kbd> done.</div>
+        <div class="row"><button data-mode="translate">Move</button><button data-mode="rotate">Rotate</button><button data-reset-hand="sel">Reset this hand</button></div>
+      </div>
+    </div>
+    <span id="insetCap" class="only-A">From above: drag the Puck or the goalie</span>
+    <svg id="insetA" class="only-A"></svg>
+
+    <div id="toolbarC" class="card only-C">
+      <button data-tool="puck"><span>Puck</span><kbd>Q</kbd></button>
+      <button data-tool="goalie"><span>Goalie</span><kbd>W</kbd></button>
+      <button data-tool="glove"><span>Glove</span><kbd>E</kbd></button>
+      <button data-tool="blocker"><span>Blocker</span><kbd>R</kbd></button>
+    </div>
+    <div id="legendC" class="card only-C"></div>
+  </div>
+</div>
+<div id="switcher"><button id="prevV" title="Previous variant ([)">‹</button><span id="vLabel"></span><button id="nextV" title="Next variant (])">›</button><button id="judgeBtn" title="Things to judge">?</button><button id="stateBtn" title="Setup state">{ }</button></div>
+<div id="drawer"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+import { ConvexHull } from 'three/addons/math/ConvexHull.js';
+import * as C2 from 'clipper2-ts';
+import { Vector3 } from 'three';
+
+// ==POSING MODULE START==  (pure: no DOM, no three.js; goalie-local frame, metres)
+// Frame: origin on the ice under the goalie's pelvis; +y up; +z = the goalie's forward; +x = the goalie's LEFT.
+// Hand targets are fractions of height H: { out: sideways away from centreline, up: above ice, fwd: ahead }.
+const IN = 0.0254;
+const V = (x, y, z) => ({ x, y, z });
+const add = (a, b) => V(a.x + b.x, a.y + b.y, a.z + b.z);
+const sub = (a, b) => V(a.x - b.x, a.y - b.y, a.z - b.z);
+const mul = (a, s) => V(a.x * s, a.y * s, a.z * s);
+const dot = (a, b) => a.x * b.x + a.y * b.y + a.z * b.z;
+const cross = (a, b) => V(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+const len = a => Math.hypot(a.x, a.y, a.z);
+const norm = a => mul(a, 1 / (len(a) || 1));
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+const UP = V(0, 1, 0), FWD = V(0, 0, 1);
+
+export function goalieDims(H) {
+  const g = clamp(H / 1.83, 0.6, 1);
+  return {
+    H, g,
+    thigh: 0.245 * H, shank: 0.246 * H, upperArm: 0.186 * H, forearm: 0.146 * H,
+    torso: 0.288 * H, shoulderHalf: 0.1295 * H, hipHalf: 0.06 * H,
+    ankleH: 0.039 * H + 0.1016,                       // ankle above ice incl. skate lift
+    padTop: 0.395 * H + 0.1016, kneeRef: 0.285 * H + 0.1016,
+    padWidth: clamp(0.155 * H, 0.20, 0.2794), padDepth: 0.09 * H, // depth simplified (shin, not knee stack)
+    blocker: { w: g * 8 * IN, l: g * 15 * IN },
+    glove: { w: g * 10.5 * IN, h: g * 17.5 * IN },
+    blade: { l: (H >= 1.70 ? 1 : g) * 15.5 * IN, h: 3.5 * IN },
+    paddle: { l: clamp(0.37 * H / IN, 18, 26) * IN, w: (g < 0.8 ? 3 : 3.5) * IN },
+    stickLen: Math.min(1.397, 0.75 * H),
+  };
+}
+
+// Leg directions are [outward, up, forward]; thigh = hip->knee, shin = knee->ankle.
+const STANDUP_LEG = { thigh: [-0.05, -0.5, 0.87], shin: [0.3, -0.86, -0.4] };
+const BUTTERFLY_LEG = { thigh: [-0.12, -0.75, 0.6], shin: [1, 0, -0.45] };
+// RVH post leg: the goalie sits almost on top of the post knee. The pad lies flat on the ice, and the shin runs out
+// to the post along the goal line. Local directions are worked out for a body turned 30° toward the post:
+// the shin is turned 30° forward, and the thigh drops slightly back and in, so that the knee sits on the pad's line just in front of the goal line.
+// The pad stands on its inner edge like a butterfly pad, its face turned back 30° so it faces straight out from the net.
+const RVH_POST_LEG = { thigh: [-0.077, -0.40, -0.166], shin: [0.866, 0, 0.5], padFace: [-0.5, 0, 0.866] };
+// RVH far leg: skate planted wide out to the side, knee forward and low, shin running out and down to the skate.
+// Solved by IK to a foot spot [outward, forward] (fractions of H).
+const RVH_FAR_LEG = { plant: { foot: [0.45, 0.02], pole: [0.2, 0.5, 1] } };
+export const RVH_TURN_DEG = 30;   // body rotation toward the post
+export const STANCES = {
+  standup:   { label: 'Stand-up',   lean: 45, leg: STANDUP_LEG },
+  butterfly: { label: 'Butterfly',  lean: 12, leg: BUTTERFLY_LEG },
+  rvhL:      { label: 'RVH left',   lean: 5, sideLean: 30, post: +1, postLeg: RVH_POST_LEG, farLeg: RVH_FAR_LEG },
+  rvhR:      { label: 'RVH right',  lean: 5, sideLean: 30, post: -1, postLeg: RVH_POST_LEG, farLeg: RVH_FAR_LEG },
+};
+
+// RVH at its own post: where the goalie's root goes so the post-leg ankle sits at the post, with the flat pad
+// standing on edge just in front of the goal line. The post is between the pad and the skate toe.
+// Top of the crease: the goalie stands on the crease arc, toes on the edge of the blue paint. Upright skates count
+// at their toes; in a kneeling Stance, the front edge of whatever pad is on the ice counts instead.
+export const CREASE_RADIUS = 1.8288;
+export function frontReach(pose) {
+  let best = -Infinity;
+  for (const l of pose.legs) {
+    if (l.shinDir.y < -0.5) best = Math.max(best, l.ankle.z + 0.7 * 0.152 * pose.dims.H);   // skate toe
+    else for (const b of l.pads) for (const c of boxCorners(b)) if (c.y < 0.05) best = Math.max(best, c.z);
+  }
+  return best;
+}
+export function placeAtCreaseTop(pose, facingDeg) {
+  const f = facingDeg * RAD, r = CREASE_RADIUS - frontReach(pose);
+  return { x: r * Math.sin(f), z: r * Math.cos(f) };
+}
+export const POST_X = 0.9144 + 0.0254;   // post centre, from the middle of the Goal Mouth
+const POST_PAD_AXIS_Z = 0.07;            // pad back face (axis - 4 cm) just clears the post
+export function placeAtPost(pose, stance, facingDeg) {
+  const st = STANCES[stance], a = pose.postAnchor, f = facingDeg * RAD;
+  const wx = a.x * Math.cos(f) + a.z * Math.sin(f), wz = -a.x * Math.sin(f) + a.z * Math.cos(f);
+  return { x: st.post * POST_X - wx, z: POST_PAD_AXIS_Z - wz };
+}
+
+// Hand targets also carry wrist angles in degrees: yaw = face turned outward, pitch = face tilted up, roll = top twisted outward.
+const NO_ROT = { yaw: 0, pitch: 0, roll: 0 };
+export const DEFAULT_TARGETS = {
+  standup:   { glove: { out: 0.24, up: 0.47, fwd: 0.34, ...NO_ROT, pitch: -20 }, blocker: { out: 0.16, up: 0.38, fwd: 0.32, ...NO_ROT } },
+  butterfly: { glove: { out: 0.24, up: 0.36, fwd: 0.26, ...NO_ROT, pitch: -20 }, blocker: { out: 0.16, up: 0.29, fwd: 0.25, ...NO_ROT } },
+};
+// RVH: the post-side hand seals the hole beside the post-side hip. A far glove sits in front of the chest;
+// a far blocker stays low enough to keep the blade on the ice.
+const RVH_POST_HAND = { out: 0.14, up: 0.22, fwd: 0.10 };   // low enough that the glove/blocker overlaps the pad top
+const RVH_FAR_GLOVE = { out: 0.12, up: 0.42, fwd: 0.16 }, RVH_FAR_BLOCKER = { out: 0.10, up: 0.34, fwd: 0.14 };
+export function defaultHands(stance, catchSide) {
+  const st = STANCES[stance];
+  if (!st.post) return structuredClone(DEFAULT_TARGETS[stance]);
+  const gloveAtPost = (catchSide === 'left' ? 1 : -1) === st.post;
+  return {
+    glove: { ...(gloveAtPost ? RVH_POST_HAND : RVH_FAR_GLOVE), ...NO_ROT, pitch: -20 },
+    blocker: { ...(gloveAtPost ? RVH_FAR_BLOCKER : RVH_POST_HAND), ...NO_ROT },
+  };
+}
+
+// Reach boxes: positions as fractions of H, wrist angles in degrees; [min, max] per axis.
+const GLOVE_ROT = { yaw: [-45, 70], pitch: [-30, 60], roll: [-60, 60] };
+const BLOCKER_ROT = { yaw: [-45, 45], pitch: [-40, 40], roll: [-45, 45] };
+const KNEELING_CLAMP = {
+  glove:   { out: [0.04, 0.45], up: [0.20, 0.70], fwd: [0.00, 0.40], ...GLOVE_ROT },
+  blocker: { out: [0.04, 0.38], up: [0.15, 0.50], fwd: [0.00, 0.40], ...BLOCKER_ROT },
+};
+export const DEFAULT_CLAMPS = {
+  standup: {
+    glove:   { out: [0.04, 0.45], up: [0.30, 0.85], fwd: [0.10, 0.45], ...GLOVE_ROT },
+    blocker: { out: [0.04, 0.38], up: [0.22, 0.65], fwd: [0.10, 0.45], ...BLOCKER_ROT },
+  },
+  butterfly: structuredClone(KNEELING_CLAMP),
+  rvhL: structuredClone({ ...KNEELING_CLAMP, glove: { ...KNEELING_CLAMP.glove, up: [0.12, 0.70] }, blocker: { ...KNEELING_CLAMP.blocker, up: [0.12, 0.50] } }),
+  rvhR: structuredClone({ ...KNEELING_CLAMP, glove: { ...KNEELING_CLAMP.glove, up: [0.12, 0.70] }, blocker: { ...KNEELING_CLAMP.blocker, up: [0.12, 0.50] } }),
+};
+
+const CLAMP_WORDS = { out: ['across the body', 'too wide'], up: ['too low', 'too high'], fwd: ['behind the body', 'too far forward'],
+  yaw: ['turned too far in', 'turned too far out'], pitch: ['tilted too far down', 'tilted too far up'], roll: ['twisted too far in', 'twisted too far out'] };
+export const ROT_KEYS = ['yaw', 'pitch', 'roll'];
+const RAD = Math.PI / 180;
+const rx = (v, a) => V(v.x, v.y * Math.cos(a) - v.z * Math.sin(a), v.y * Math.sin(a) + v.z * Math.cos(a));
+const ry = (v, a) => V(v.x * Math.cos(a) + v.z * Math.sin(a), v.y, -v.x * Math.sin(a) + v.z * Math.cos(a));
+const rz = (v, a) => V(v.x * Math.cos(a) - v.y * Math.sin(a), v.x * Math.sin(a) + v.y * Math.cos(a), v.z);
+// Same as a three.js Euler(-pitch, side*yaw, -side*roll, 'YXZ').
+const wristRotate = (v, side, r) => ry(rx(rz(v, -side * r.roll * RAD), -r.pitch * RAD), side * r.yaw * RAD);
+
+function legDefFor(st, side) { return st.post ? (side === st.post ? st.postLeg : st.farLeg) : st.leg; }
+
+// A pad is two boxes: the shin part (boot to knee roll) and the thigh rise, which follows the thigh up from the knee.
+const KNEE_ROLL = 0.04;
+// face: the pad face direction (default straight ahead).
+function padBoxes(d, hip, knee, ankle, face = FWD) {
+  const box = (from, dir, l, width, depth) => {
+    const n = norm(sub(face, mul(dir, dot(face, dir))));
+    return { center: add(add(from, mul(dir, l / 2)), mul(n, depth / 2 - 0.04)), u: dir, n, len: l, width, depth };
+  };
+  const u = norm(sub(knee, ankle));                        // up the shin
+  const bottom = sub(ankle, mul(u, d.ankleH - 0.01));      // boot over the skate
+  const shin = box(bottom, u, len(sub(knee, bottom)) + KNEE_ROLL, d.padWidth, d.padDepth);
+  const rise = box(knee, norm(sub(hip, knee)), d.padTop - d.kneeRef, 0.6 * d.padWidth, 0.8 * d.padDepth);
+  return [shin, rise];
+}
+
+export function boxCorners(b) {
+  const w = cross(b.u, b.n), out = [];
+  for (const a of [-1, 1]) for (const c of [-1, 1]) for (const e of [-1, 1])
+    out.push(add(b.center, add(mul(b.u, a * b.len / 2), add(mul(b.n, c * b.depth / 2), mul(w, e * b.width / 2)))));
+  return out;
+}
+
+function ikElbow(A, T, a, b, pole) {
+  const dir = norm(sub(T, A));
+  const dist = clamp(len(sub(T, A)), Math.abs(a - b) + 1e-4, a + b - 1e-4);
+  const cosA = (a * a + dist * dist - b * b) / (2 * a * dist);
+  const perp = norm(sub(pole, mul(dir, dot(pole, dir))));
+  return add(A, add(mul(dir, a * cosA), mul(perp, a * Math.sqrt(Math.max(0, 1 - cosA * cosA)))));
+}
+
+// setup: { stance, heightM, catchSide:'left'|'right', gripAboveIn, glove:{out,up,fwd}, blocker:{out,up,fwd} }
+export function solvePose(setup, clamps = DEFAULT_CLAMPS) {
+  const H = setup.heightM, d = goalieDims(H), st = STANCES[setup.stance];
+  const gs = setup.catchSide === 'left' ? 1 : -1;             // glove side sign (+x = goalie's left)
+
+  // Legs hang from the pelvis at y=0, then the whole body is lifted until its lowest point touches the ice.
+  // Planted legs (skate on the ice) are solved after, by IK from the grounded hip.
+  let legs = [1, -1].map(side => {
+    const def = legDefFor(st, side);
+    const dir = v => norm(V(side * v[0], v[1], v[2]));
+    const hip = V(side * d.hipHalf, 0, 0);
+    if (def.plant) return { side, hip, plant: def.plant };
+    const shinDir = dir(def.shin);
+    const knee = add(hip, mul(dir(def.thigh), d.thigh));
+    const ankle = add(knee, mul(shinDir, d.shank));
+    const pads = padBoxes(d, hip, knee, ankle, def.padFace && V(side * def.padFace[0], def.padFace[1], def.padFace[2]));
+    // Pads can't pass through each other: push the lower leg out until its pads stop at the centreline.
+    const inner = Math.min(...pads.flatMap(b => boxCorners(b).map(c => c.x * side)));
+    const push = V(Math.max(0, -inner) * side, 0, 0);
+    return { side, hip, knee: add(knee, push), ankle: add(ankle, push), shinDir, pads: pads.map(b => ({ ...b, center: add(b.center, push) })) };
+  });
+  let low = Infinity;
+  for (const l of legs) {
+    if (l.plant) continue;
+    low = Math.min(low, l.ankle.y - d.ankleH * Math.max(0, -l.shinDir.y));  // skate blade only counts when upright
+    for (const b of l.pads) for (const c of boxCorners(b)) low = Math.min(low, c.y);
+  }
+  const lift = V(0, -low, 0);
+  legs = legs.map(l => {
+    const hip = add(l.hip, lift);
+    if (l.plant) {
+      const p = l.plant, side = l.side;
+      // The skate rolls onto its inside edge: raise the foot until the pad's lowest corner rests on the ice.
+      let footY = d.ankleH, leg;
+      for (let i = 0; i < 4; i++) {
+        const footT = V(side * p.foot[0] * H, footY, p.foot[1] * H);
+        const knee = ikElbow(hip, footT, d.thigh, d.shank, V(side * p.pole[0], p.pole[1], p.pole[2]));
+        const shinDir = norm(sub(footT, knee)), ankle = add(knee, mul(shinDir, d.shank));
+        leg = { side, hip, knee, ankle, shinDir, pads: padBoxes(d, hip, knee, ankle) };
+        footY -= Math.min(0, ...leg.pads.flatMap(b => boxCorners(b).map(c => c.y)));
+      }
+      return leg;
+    }
+    return { ...l, hip, knee: add(l.knee, lift), ankle: add(l.ankle, lift), pads: l.pads.map(b => ({ ...b, center: add(b.center, lift) })) };
+  });
+  const pelvis = lift;
+  // RVH: the post-leg ankle (between pad boot and skate toe) is what sits against the post.
+  const postLeg = st.post ? legs.find(l => l.side === st.post) : null;
+  const postAnchor = postLeg ? V(postLeg.ankle.x, 0, postLeg.ankle.z) : null;
+
+  const lean = st.lean * Math.PI / 180, sl = (st.sideLean || 0) * Math.PI / 180;
+  const torsoDir = norm(V((st.post || 0) * Math.sin(sl), Math.cos(lean), Math.sin(lean)));
+  const shoulderMid = add(pelvis, mul(torsoDir, d.torso));
+  const lateral = norm(cross(torsoDir, FWD));                // toward the goalie's left
+  const shoulders = { 1: add(shoulderMid, mul(lateral, d.shoulderHalf)), [-1]: sub(shoulderMid, mul(lateral, d.shoulderHalf)) };
+  const head = add(shoulderMid, add(mul(torsoDir, 0.06 * H), V(0, 0.05 * H, 0.02 * H)));
+
+  const hand = which => {
+    const side = which === 'glove' ? gs : -gs, t = setup[which], c = clamps[setup.stance][which], flags = [];
+    const placed = {};
+    for (const k of Object.keys(c)) {
+      const v = t[k] ?? 0;
+      placed[k] = clamp(v, c[k][0], c[k][1]);
+      if (v < c[k][0] - 1e-6) flags.push(CLAMP_WORDS[k][0]);
+      if (v > c[k][1] + 1e-6) flags.push(CLAMP_WORDS[k][1]);
+    }
+    const shoulder = shoulders[side], reach = (d.upperArm + d.forearm) * 0.995;
+    let wrist = V(side * placed.out * H, placed.up * H, placed.fwd * H);
+    if (len(sub(wrist, shoulder)) > reach) { wrist = add(shoulder, mul(norm(sub(wrist, shoulder)), reach)); flags.push('out of arm reach'); }
+    const elbow = ikElbow(shoulder, wrist, d.upperArm, d.forearm, V(side * 0.8, -1, -0.4));
+    const rot = { yaw: placed.yaw, pitch: placed.pitch, roll: placed.roll };
+    return { side, requested: V(side * t.out * H, t.up * H, t.fwd * H), wrist, elbow, shoulder, flags, rot,
+      face: wristRotate(FWD, side, rot), up: wristRotate(UP, side, rot), out: wristRotate(V(side, 0, 0), side, rot),
+      placedFrac: { out: wrist.x * side / H, up: wrist.y / H, fwd: wrist.z / H, ...rot } };
+  };
+  const glove = hand('glove'), blocker = hand('blocker');
+
+  // Stick: straight shaft gripped gripDist up from the heel, turning with the blocker wrist. The neutral shaft (heel straight
+  // ahead of the hand) is turned by the wrist angles; the blade stays flat on the ice, so only the shaft's heading survives:
+  // the heel swings round the spot under the hand at the same distance, and the toe stays square to the shaft, toward the glove side.
+  const grip = blocker.wrist, gripDist = d.paddle.l + setup.gripAboveIn * IN;
+  const onIce = grip.y < gripDist, reachOnIce = onIce ? Math.sqrt(gripDist ** 2 - grip.y ** 2) : 0;
+  const turned = wristRotate(onIce ? norm(V(0, -grip.y, reachOnIce)) : FWD, blocker.side, blocker.rot);
+  const heading = Math.hypot(turned.x, turned.z) > 1e-3 ? norm(V(turned.x, 0, turned.z)) : FWD;
+  const heel = onIce ? add(V(grip.x, 0, grip.z), mul(heading, reachOnIce)) : V(grip.x, grip.y - gripDist, grip.z);
+  const stickDir = norm(sub(grip, heel));
+  const stick = { grip, heel, dir: stickDir, knob: add(heel, mul(stickDir, d.stickLen)), toeDir: mul(cross(UP, heading), gs),
+    headingDeg: Math.round(Math.atan2(heading.x, heading.z) * 180 / Math.PI),
+    gripDist, onIce, lift: onIce ? 0 : heel.y, bladeAhead: heel.z - grip.z,
+    shaftAngleDeg: Math.asin(clamp(stickDir.y, -1, 1)) * 180 / Math.PI };
+
+  return { dims: d, pelvis, torsoDir, shoulderMid, shoulders, head, legs, glove, blocker, stick, postAnchor };
+}
+// ==POSING MODULE END==
+
+// ==COVERAGE MODULE START==  (pure apart from three.js ConvexHull/Vector3 and clipper2-ts; metres)
+// World frame: goal plane z = 0 (the goal line), ice y = 0, +x = the goalie's left (the shooter's right), shooter at +z.
+// The goalie is a list of convex parts in its own local frame (posing frame). Each part is dilated by the Puck in 3D
+// (Minkowski sum with the Puck cylinder) and its hull is cached in the goalie frame: the Puck is symmetric about the
+// vertical, so moving or turning the goalie and dragging the Puck never invalidate a hull.
+export const PUCK_R = 1.5 * IN, PUCK_HALF_T = 0.5 * IN;
+export const MOUTH_HALF_W = 0.9144, MOUTH_H = 1.2192;            // inside the posts, ice to crossbar
+// Where the Puck's centre must cross the goal plane to score: the Goal Mouth shrunk by the Puck's half-sizes.
+export const SCORE_RECT = { x0: -MOUTH_HALF_W + PUCK_R, x1: MOUTH_HALF_W - PUCK_R, y0: PUCK_HALF_T, y1: MOUTH_H - PUCK_HALF_T };
+const RIM_N = 16, SPHERE_N = 32, SPHERE_K = 1.08, CLIP_SCALE = 1e5; // clipper integer units per metre
+const PUCK_PTS = [];
+for (let i = 0; i < RIM_N; i++) {
+  const a = 2 * Math.PI * i / RIM_N, r = PUCK_R / Math.cos(Math.PI / RIM_N);   // circumscribed: never under-covers
+  for (const s of [-1, 1]) PUCK_PTS.push(V(r * Math.cos(a), s * PUCK_HALF_T, r * Math.sin(a)));
+}
+const SPHERE_DIRS = Array.from({ length: SPHERE_N }, (_, i) => {
+  const y = 1 - 2 * (i + 0.5) / SPHERE_N, r = Math.sqrt(1 - y * y), a = i * Math.PI * (3 - Math.sqrt(5));
+  return V(r * Math.cos(a) * SPHERE_K, y * SPHERE_K, r * Math.sin(a) * SPHERE_K);
+});
+
+// Parts, built from a solved pose. Each is convex:
+//  capsule { a, b, r } (a sphere when a = b) | box { center, u, n, w, l, d } (l along u, d along n, w along u×n)
+//  disk { center, ax, ay, rx, ry, t }  (an elliptical slab: semi-axes rx along ax, ry along ay, thickness t)
+export function goalieParts(pose) {
+  const d = pose.dims, H = d.H, parts = [];
+  const cap = (id, a, b, r, mat) => parts.push({ id, kind: 'capsule', a, b, r, mat });
+  const box = (id, center, u, n, w, l, dp, mat) => parts.push({ id, kind: 'box', center, u, n, w, l, d: dp, mat });
+  for (const l of pose.legs) {
+    const s = l.side > 0 ? 'L' : 'R';
+    cap('thigh' + s, l.hip, l.knee, 0.055 * H, 'body');
+    cap('shin' + s, l.knee, l.ankle, 0.04 * H, 'body');
+    l.pads.forEach((b, i) => box('pad' + s + i, b.center, b.u, b.n, b.width, b.len, b.depth, 'pad'));
+  }
+  const tn = norm(sub(FWD, mul(pose.torsoDir, dot(FWD, pose.torsoDir))));
+  box('pelvis', add(pose.pelvis, mul(pose.torsoDir, 0.02 * H)), pose.torsoDir, tn, 0.24 * H, 0.1 * H, 0.14 * H, 'body');
+  box('chest', add(pose.pelvis, mul(pose.torsoDir, d.torso * 0.55)), pose.torsoDir, tn, 2 * d.shoulderHalf + 0.1, d.torso * 1.1, 0.15 * H, 'jersey');
+  cap('head', pose.head, pose.head, 0.065 * H, 'body');
+  for (const [w, h] of [['glove', pose.glove], ['blocker', pose.blocker]]) {
+    cap(w + 'Shoulder', h.shoulder, h.shoulder, 0.05 * H, 'jersey');
+    cap(w + 'UpperArm', h.shoulder, h.elbow, 0.04 * H, 'jersey');
+    cap(w + 'Forearm', h.elbow, h.wrist, 0.035 * H, 'jersey');
+  }
+  const handOff = (h, o, u, f) => add(h.wrist, add(mul(h.out, o), add(mul(h.up, u), mul(h.face, f))));
+  const gl = pose.glove;
+  parts.push({ id: 'glove', kind: 'disk', center: handOff(gl, 0.05, 0.06, 0.04), ax: cross(gl.face, gl.up), ay: gl.up, rx: d.glove.w / 2, ry: d.glove.h / 2, t: 0.06, mat: 'glove' });
+  const bl = pose.blocker;
+  box('blocker', handOff(bl, 0.07, 0.05, 0.03), bl.up, bl.face, d.blocker.w, d.blocker.l, 0.05, 'blocker');
+  const s = pose.stick, paddleEnd = add(s.heel, mul(s.dir, d.paddle.l));
+  box('paddle', add(s.heel, mul(s.dir, d.paddle.l / 2)), s.dir, norm(sub(FWD, mul(s.dir, dot(FWD, s.dir)))), d.paddle.w, d.paddle.l, 0.02, 'stick');
+  cap('shaft', paddleEnd, s.knob, 0.015, 'stick');
+  box('blade', add(s.heel, add(mul(s.toeDir, d.blade.l / 2), mul(s.dir, d.blade.h / 2))), s.dir, cross(s.toeDir, s.dir), d.blade.l, d.blade.h, 0.015, 'blade');
+  return parts;
+}
+
+function partPoints(p) {
+  if (p.kind === 'capsule') return [p.a, p.b].flatMap(e => SPHERE_DIRS.map(s => add(e, mul(s, p.r))));
+  if (p.kind === 'box') {
+    const w = cross(p.u, p.n), out = [];
+    for (const a of [-1, 1]) for (const c of [-1, 1]) for (const e of [-1, 1])
+      out.push(add(p.center, add(mul(p.u, a * p.l / 2), add(mul(p.n, c * p.d / 2), mul(w, e * p.w / 2)))));
+    return out;
+  }
+  const N = 24, k = 1 / Math.cos(Math.PI / N), nrm = cross(p.ay, p.ax), out = [];   // disk
+  for (let i = 0; i < N; i++) {
+    const a = 2 * Math.PI * i / N, rim = add(p.center, add(mul(p.ax, k * p.rx * Math.cos(a)), mul(p.ay, k * p.ry * Math.sin(a))));
+    for (const s of [-1, 1]) out.push(add(rim, mul(nrm, s * p.t / 2)));
+  }
+  return out;
+}
+
+// The part dilated by the Puck, as a 3D convex hull { verts, edges } in the goalie frame.
+export function dilatedHull(part) {
+  const pts = [];
+  for (const b of partPoints(part)) for (const k of PUCK_PTS) pts.push(new Vector3(b.x + k.x, b.y + k.y, b.z + k.z));
+  const hull = new ConvexHull().setFromPoints(pts);
+  const index = new Map(), verts = [], edges = [];
+  const idx = vn => { let i = index.get(vn); if (i === undefined) { i = verts.length; index.set(vn, i); verts.push(V(vn.point.x, vn.point.y, vn.point.z)); } return i; };
+  for (const f of hull.faces) {
+    let e = f.edge;
+    do { const a = idx(e.tail()), b = idx(e.head()); if (a < b) edges.push([a, b]); e = e.next; } while (e !== f.edge);
+  }
+  return { verts, edges };
+}
+
+// Goalie frame -> world: turned by facing f about +y, then moved to root (x, z).
+export function hullToWorld(h, root) {
+  const c = Math.cos(root.f), s = Math.sin(root.f);
+  return { verts: h.verts.map(v => V(v.x * c + v.z * s + root.x, v.y, -v.x * s + v.z * c + root.z)), edges: h.edges };
+}
+
+// Points whose convex hull is the hull cut to the slab 0 <= z <= zMax (only that part sits between the Puck and the goal plane).
+function clipSlab(h, zMax) {
+  const out = [], { verts, edges } = h;
+  for (const v of verts) if (v.z >= 0 && v.z <= zMax) out.push(v);
+  for (const [i, j] of edges) {
+    const a = verts[i], b = verts[j];
+    for (const z0 of [0, zMax]) if ((a.z - z0) * (b.z - z0) < 0) { const t = (z0 - a.z) / (b.z - a.z); out.push(V(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, z0)); }
+  }
+  return out;
+}
+
+function hull2d(pts) {                       // Andrew's monotone chain, counter-clockwise
+  if (pts.length < 3) return pts;
+  pts = pts.slice().sort((a, b) => a.x - b.x || a.y - b.y);
+  const crs = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lo = [], hi = [];
+  for (const p of pts) { while (lo.length >= 2 && crs(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (let i = pts.length - 1; i >= 0; i--) { const p = pts[i]; while (hi.length >= 2 && crs(hi[hi.length - 2], hi[hi.length - 1], p) <= 0) hi.pop(); hi.push(p); }
+  return lo.slice(0, -1).concat(hi.slice(0, -1));
+}
+
+const ringArea = r => { let a = 0; for (let i = 0; i < r.length; i++) { const p = r[i], q = r[(i + 1) % r.length]; a += p.x * q.y - q.x * p.y; } return a / 2; };
+function ringCentroid(r) {
+  let a = 0, cx = 0, cy = 0;
+  for (let i = 0; i < r.length; i++) { const p = r[i], q = r[(i + 1) % r.length], w = p.x * q.y - q.x * p.y; a += w; cx += (p.x + q.x) * w; cy += (p.y + q.y) * w; }
+  return a ? { x: cx / (3 * a), y: cy / (3 * a) } : r[0];
+}
+// Polytree -> [{ outer, holes, area, centroid }] in metres on the goal plane.
+function treeToShapes(tree) {
+  const toM = path => path.map(p => ({ x: p.x / CLIP_SCALE, y: p.y / CLIP_SCALE })), shapes = [];
+  const walk = node => {
+    for (let i = 0; i < node.count; i++) {
+      const o = node.child(i), outer = toM(o.polygon), holes = [];
+      for (let j = 0; j < o.count; j++) { holes.push(toM(o.child(j).polygon)); walk(o.child(j)); }
+      shapes.push({ outer, holes, area: Math.abs(ringArea(outer)) - holes.reduce((s, h) => s + Math.abs(ringArea(h)), 0), centroid: ringCentroid(outer) });
+    }
+  };
+  walk(tree);
+  return shapes;
+}
+
+// worldHulls: dilated hulls in world space. P: the Puck centre. Returns the Coverage Shadow and Open Net as shapes
+// on the goal plane (inside SCORE_RECT), and the % covered. One source of truth for the number and the drawing.
+export function computeCoverage(worldHulls, P) {
+  const t0 = performance.now(), R = SCORE_RECT, rectArea = (R.x1 - R.x0) * (R.y1 - R.y0);
+  if (P.z <= 0.01) return { noShot: true, shadow: [], open: [], rectArea, pctCovered: 0, pctOpen: 0, ms: 0 };
+  const zMax = P.z - 0.005, polys = [];
+  for (const h of worldHulls) {
+    const pts = clipSlab(h, zMax);
+    if (pts.length < 3) continue;
+    const proj = pts.map(v => { const t = P.z / (P.z - v.z); return { x: P.x + (v.x - P.x) * t, y: P.y + (v.y - P.y) * t }; });
+    const ring = hull2d(proj);
+    if (ring.length >= 3) polys.push(ring.map(p => ({ x: Math.round(p.x * CLIP_SCALE), y: Math.round(p.y * CLIP_SCALE) })));
+  }
+  const S = CLIP_SCALE, rect = [[{ x: R.x0 * S, y: R.y0 * S }, { x: R.x1 * S, y: R.y0 * S }, { x: R.x1 * S, y: R.y1 * S }, { x: R.x0 * S, y: R.y1 * S }]];
+  const union = polys.length ? C2.union(polys, C2.FillRule.NonZero) : [];
+  const shadowTree = new C2.PolyTree64(), openTree = new C2.PolyTree64();
+  C2.booleanOpWithPolyTree(C2.ClipType.Intersection, union, rect, shadowTree, C2.FillRule.NonZero);
+  C2.booleanOpWithPolyTree(C2.ClipType.Difference, rect, union, openTree, C2.FillRule.NonZero);
+  const shadow = treeToShapes(shadowTree), open = treeToShapes(openTree);
+  const covered = shadow.reduce((s, x) => s + x.area, 0);
+  return { noShot: false, P, shadow, open, rectArea, coveredArea: covered, pctCovered: 100 * covered / rectArea, pctOpen: 100 - 100 * covered / rectArea,
+    parts: polys.length, ms: performance.now() - t0 };
+}
+// ==COVERAGE MODULE END==
+
+// ---------------- page (throwaway) ----------------
+const $ = s => document.querySelector(s), $$ = s => document.querySelectorAll(s);
+const DEG = 180 / Math.PI;
+// Puck spots. +x is the goalie's left.
+const PUCK_SPOTS = [
+  ['Slot', 0, 6], ['High slot', 0, 10.5], ['In tight', 0.4, 2.2], ["Dot (goalie's left)", 6.7, 6.1], ["Sharp angle (goalie's right)", -3.2, 1.0],
+  ["Point (goalie's left)", 7, 18], ['Behind the line', 1.5, -0.8],
+];
+// Depths: how far out the goalie's toes are from the middle of the goal line.
+const ARCS = { top: CREASE_RADIUS, mid: 1.35, deep: 0.95 };
+
+// Goalie placement: lock 'arc' = toes on a circle of radius arcR round the net centre (position follows facing);
+// 'post' = RVH locked to its post; 'free' = wherever the coach put it. follow = square to the Puck and on its angle.
+let setup = { stance: 'butterfly', heightM: 69 * IN, catchSide: 'left', gripAboveIn: 3,
+  goalie: { x: 0, z: 1.3 }, facingDeg: 0, lock: 'arc', arcR: CREASE_RADIUS, follow: false };
+Object.assign(setup, defaultHands(setup.stance, setup.catchSide));
+const puck = { x: 0, z: 6 };
+const show = { cone: true, margin: true };
+const VARIANTS = [{ key: 'A', name: 'Grab it in 3D' }, { key: 'B', name: 'Control panel + rink map' }, { key: 'C', name: 'Tools + keyboard' }];
+const params = new URLSearchParams(location.search);
+let variant = VARIANTS.some(v => v.key === params.get('variant')) ? params.get('variant') : 'A';
+let currentView = 'puck';
+let sel = null;          // A: 'puck' | 'goalie' | 'glove' | 'blocker' | null
+let tool = 'puck';       // C: active tool
+
+// three.js scene
+const view = $('#view');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(devicePixelRatio);
+view.prepend(renderer.domElement);
+const canvas = renderer.domElement;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xdfe8ef);
+const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 200);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x99aabb, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 1.6); sun.position.set(3, 6, 5); scene.add(sun);
+const orbit = new OrbitControls(camera, canvas);
+const tv = p => new THREE.Vector3(p.x, p.y, p.z);
+
+// Rink: ice, goal line, crease, net frame
+const mat = c => new THREE.MeshStandardMaterial({ color: c, roughness: 0.7 });
+// The whole defending zone on a standard 200 × 85 ft sheet. The research gives the goal line 11 ft from the end boards
+// and the corners a 28 ft radius; the rest are standard markings (not checked against Hockey Canada's text): blue
+// line 64 ft out from the goal line, end-zone dots 20 ft out and 22 ft either side with 15 ft circles and hash marks,
+// neutral-zone dots 5 ft past the blue line.
+const FT = 0.3048, LINE_W = 2 * IN;
+const RINK = { halfW: 42.5 * FT, endZ: -11 * FT, cornerR: 28 * FT, blueZ: 64 * FT, blueW: 12 * IN, farZ: 84 * FT,
+  dotX: 22 * FT, dotZ: 20 * FT, circleR: 15 * FT, hashGap: 67 * IN, hashLen: 2 * FT, nzDotZ: 69 * FT, boardH: 42 * IN };
+const DOTS = [[RINK.dotX, RINK.dotZ], [-RINK.dotX, RINK.dotZ]];
+function rinkHalfW(z) {           // half-width of the ice at z: narrower in the corners
+  const cz = RINK.endZ + RINK.cornerR;
+  if (z >= cz) return RINK.halfW;
+  const dz = cz - z; return RINK.halfW - RINK.cornerR + Math.sqrt(Math.max(0, RINK.cornerR ** 2 - dz * dz));
+}
+// Inside face of the boards [x, z]: down the right side, round both corners and the end, back up the left side.
+const BOARDS = (() => {
+  const R = RINK.cornerR, cx = RINK.halfW - R, cz = RINK.endZ + R, pts = [[RINK.halfW, RINK.farZ]];
+  for (let i = 0; i <= 24; i++) { const a = Math.PI / 2 * i / 24; pts.push([cx + R * Math.cos(a), cz - R * Math.sin(a)]); }
+  for (let i = 0; i <= 24; i++) { const a = Math.PI / 2 * i / 24; pts.push([-cx - R * Math.sin(a), cz - R * Math.cos(a)]); }
+  pts.push([-RINK.halfW, RINK.farZ]);
+  return pts;
+})();
+// Hash marks: two each side of each end-zone circle, running out toward the boards and the slot.
+const HASHES = DOTS.flatMap(([x, z]) => [-1, 1].flatMap(sx => [-1, 1].map(sz => {
+  const hz = z + sz * RINK.hashGap / 2, x0 = x + sx * Math.sqrt(RINK.circleR ** 2 - (RINK.hashGap / 2) ** 2);
+  return [[x0, hz], [x0 + sx * RINK.hashLen, hz]];
+})));
+const flatOnIce = (geo, color, y = 0.0005) => { const m = new THREE.Mesh(geo, color.isMaterial ? color : mat(color)); m.rotation.x = -Math.PI / 2; m.position.y = y; scene.add(m); return m; };
+const strip = (x0, z0, x1, z1, w, color, y = 0.0006) => {    // a painted line of width w from (x0, z0) to (x1, z1)
+  const m = flatOnIce(new THREE.PlaneGeometry(Math.hypot(x1 - x0, z1 - z0), w), color, y);
+  m.position.x = (x0 + x1) / 2; m.position.z = (z0 + z1) / 2;
+  m.rotation.set(-Math.PI / 2, 0, Math.atan2(-(z1 - z0), x1 - x0)); return m;   // turn in the ice plane, then lay flat
+};
+flatOnIce(new THREE.ShapeGeometry(new THREE.Shape(BOARDS.map(([x, z]) => new THREE.Vector2(x, -z)))), 0xf4f8fb, -0.001);
+strip(-rinkHalfW(0), -LINE_W / 2, rinkHalfW(0), -LINE_W / 2, LINE_W, 0xc8102e);                       // goal line
+strip(-RINK.halfW, RINK.blueZ + RINK.blueW / 2, RINK.halfW, RINK.blueZ + RINK.blueW / 2, RINK.blueW, 0x1d4ed8);   // blue line
+for (const [x, z] of DOTS) {
+  const ring = flatOnIce(new THREE.RingGeometry(RINK.circleR - LINE_W, RINK.circleR, 96), 0xc8102e); ring.position.x = x; ring.position.z = z;
+  const dot = flatOnIce(new THREE.CircleGeometry(1 * FT, 32), 0xc8102e, 0.0007); dot.position.x = x; dot.position.z = z;
+}
+for (const [[x0, z0], [x1, z1]] of HASHES) strip(x0, z0, x1, z1, LINE_W, 0xc8102e);
+for (const x of [RINK.dotX, -RINK.dotX]) { const d = flatOnIce(new THREE.CircleGeometry(1 * FT, 32), 0xc8102e, 0.0007); d.position.x = x; d.position.z = RINK.nzDotZ; }
+const crease = flatOnIce(new THREE.CircleGeometry(CREASE_RADIUS, 48, Math.PI, Math.PI), 0x9fc6ea);
+flatOnIce(new THREE.RingGeometry(CREASE_RADIUS - LINE_W, CREASE_RADIUS, 64, 1, Math.PI, Math.PI), 0xc8102e, 0.0007);
+// Boards, open at the far end, painted like real ones: yellow kickplate, white boards, red cap rail on top.
+{ const band = (y0, y1, color) => {
+    const pos = [], idx = [];
+    BOARDS.forEach(([x, z], i) => { pos.push(x, y0, z, x, y1, z); if (i) { const a = 2 * i - 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); } });
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    scene.add(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color, roughness: 0.6, side: THREE.DoubleSide })));
+  };
+  const KICK = 9 * IN, CAP = 4 * IN;
+  band(0, KICK, 0xf5c518); band(KICK, RINK.boardH - CAP, 0xf8fafc); band(RINK.boardH - CAP, RINK.boardH, 0xd7262e);
+  // The cap rail has a top too, so it reads as a rail from above.
+  const top = new THREE.Shape(), out = 3 * IN;
+  BOARDS.forEach(([x, z], i) => {   // offset each point outward, perpendicular to the boards
+    const [px, pz] = BOARDS[Math.max(0, i - 1)], [nx, nz] = BOARDS[Math.min(BOARDS.length - 1, i + 1)];
+    let ox = nz - pz, oz = -(nx - px); const l = Math.hypot(ox, oz) || 1; ox /= l; oz /= l;
+    if (ox * x + oz * (z - 5) < 0) { ox = -ox; oz = -oz; }
+    const X = x + ox * out, Z = z + oz * out;
+    i ? top.lineTo(X, -Z) : top.moveTo(X, -Z); });
+  for (let i = BOARDS.length - 1; i >= 0; i--) top.lineTo(BOARDS[i][0], -BOARDS[i][1]);
+  flatOnIce(new THREE.ShapeGeometry(top), 0xd7262e, RINK.boardH).material.side = THREE.DoubleSide; }
+const red = mat(0xc8102e);
+const postH = MOUTH_H + 0.0254, postX = MOUTH_HALF_W + 0.0254;
+for (const x of [-postX, postX]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.0254, 0.0254, postH, 16), red); p.position.set(x, postH / 2, 0); scene.add(p); }
+const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.0254, 0.0254, postX * 2, 16), red); bar.rotation.z = Math.PI / 2; bar.position.set(0, postH, 0); scene.add(bar);
+{ const pts = [V(-postX, 0, 0), V(-1.1176, 0, -0.66), V(0, 0, -1.1176), V(1.1176, 0, -0.66), V(postX, 0, 0)].map(tv);
+  const curve = new THREE.CatmullRomCurve3(pts); scene.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 40, 0.02, 8), mat(0xffffff)));
+  for (const x of [-postX, postX]) { const g = new THREE.BufferGeometry().setFromPoints([V(x, postH, 0), V(x * 0.9, 1.0, -0.45), V(x * 0.95, 0, -0.66)].map(tv));
+    scene.add(new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xffffff }))); } }
+
+// Puck + orange grab ring
+const puckMesh = new THREE.Group(); scene.add(puckMesh);
+{ const disk = new THREE.Mesh(new THREE.CylinderGeometry(PUCK_R, PUCK_R, 2 * PUCK_HALF_T, 24), mat(0x111111)); disk.position.y = PUCK_HALF_T; puckMesh.add(disk); }
+const puckRing = new THREE.Mesh(new THREE.RingGeometry(0.16, 0.22, 40), new THREE.MeshBasicMaterial({ color: 0xf97316, transparent: true, opacity: 0.85, side: THREE.DoubleSide }));
+puckRing.rotation.x = -Math.PI / 2; puckRing.position.y = 0.002; puckMesh.add(puckRing);
+const puckHit = new THREE.Mesh(new THREE.CircleGeometry(0.3, 16), new THREE.MeshBasicMaterial({ visible: false }));
+puckHit.rotation.x = -Math.PI / 2; puckHit.position.y = 0.003; puckMesh.add(puckHit);
+
+// Goalie root, hand balls, turn ring
+const goalieRoot = new THREE.Group(); scene.add(goalieRoot);
+let goalieMesh = new THREE.Group(); goalieRoot.add(goalieMesh);
+const handles = {
+  glove: new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12), new THREE.MeshBasicMaterial({ color: 0xf59e0b, depthTest: false, transparent: true, opacity: 0.85 })),
+  blocker: new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12), new THREE.MeshBasicMaterial({ color: 0x2563eb, depthTest: false, transparent: true, opacity: 0.85 })),
+};
+for (const h of Object.values(handles)) { h.renderOrder = 10; goalieRoot.add(h); }
+const turnRing = new THREE.Group(); goalieRoot.add(turnRing);
+{ const r = new THREE.Mesh(new THREE.RingGeometry(0.92, 0.97, 64), new THREE.MeshBasicMaterial({ color: 0x1f3a5f, transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }));
+  r.rotation.x = -Math.PI / 2; r.position.y = 0.004; turnRing.add(r); }
+const turnKnob = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 12), new THREE.MeshBasicMaterial({ color: 0x1f3a5f, depthTest: false, transparent: true, opacity: 0.9 }));
+turnKnob.position.set(0, 0.08, 0.945); turnKnob.renderOrder = 10; turnRing.add(turnKnob);
+
+const tc = new TransformControls(camera, canvas); tc.setSize(0.7); scene.add(tc);
+let gizmoDragging = null;
+const handSide = which => (which === 'glove') === (setup.catchSide === 'left') ? 1 : -1;
+tc.addEventListener('dragging-changed', e => { orbit.enabled = !e.value; if (!e.value && gizmoDragging) { setup[gizmoDragging] = { ...pose[gizmoDragging].placedFrac }; gizmoDragging = null; update(); refreshHelpers(); } });
+// Moving a hand, the arrows are lined up with the shot, not the rink: one runs along the line from the Puck through
+// the hand (depth along the shot), one across it on the level, and one up/down in the picture. They sit on a proxy
+// in world space whose frame is rebuilt between drags. Rotating keeps the rings on the hand's own axes.
+const gizmoProxy = new THREE.Object3D(); scene.add(gizmoProxy);
+const handWorld = w => handles[w].getWorldPosition(new THREE.Vector3());
+const shotDir = w => { const d = new THREE.Vector3(puck.x, PUCK_HALF_T, puck.z).sub(handWorld(w)); return d.lengthSq() < 1e-6 ? new THREE.Vector3(0, 0, 1) : d.normalize(); };
+function alignProxy(w) {
+  const z = shotDir(w), up = new THREE.Vector3(0, 1, 0);
+  let x = new THREE.Vector3().crossVectors(up, z); if (x.lengthSq() < 1e-6) x.set(1, 0, 0); x.normalize();
+  const y = new THREE.Vector3().crossVectors(z, x);
+  gizmoProxy.position.copy(handWorld(w));
+  gizmoProxy.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
+}
+function moveHandToWorld(w, p) {
+  const l = goalieRoot.worldToLocal(p.clone()), side = handSide(w), H = setup.heightM;
+  setup[w] = { ...setup[w], out: l.x * side / H, up: l.y / H, fwd: l.z / H };
+  update();
+}
+tc.addEventListener('objectChange', () => {
+  const which = sel; gizmoDragging = which;
+  if (tc.object === gizmoProxy) return moveHandToWorld(which, gizmoProxy.position);
+  const p = tc.object.position, side = handSide(which), H = setup.heightM;
+  const e = new THREE.Euler().setFromQuaternion(tc.object.quaternion, 'YXZ');
+  setup[which] = { out: p.x * side / H, up: p.y / H, fwd: p.z / H, yaw: side * e.y * DEG, pitch: -e.x * DEG, roll: -side * e.z * DEG };
+  update({ keepHandles: true });
+});
+function setMode(m) { tc.setMode(m); refreshHelpers(); renderControls(); }
+
+// Goalie meshes, built from the same parts the coverage uses
+const M = { body: mat(0x1f3a5f), jersey: mat(0xc8102e), pad: mat(0xf2f2f2), glove: mat(0xe8b04a), blocker: mat(0xffffff), stick: mat(0x222222), blade: mat(0x111111) };
+const basisQ = (x, y, z) => new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(tv(x), tv(y), tv(z)));
+function partMesh(p) {
+  let mesh;
+  if (p.kind === 'capsule') {
+    const L = len(sub(p.b, p.a));
+    mesh = new THREE.Mesh(L < 1e-6 ? new THREE.SphereGeometry(p.r, 14, 10) : new THREE.CapsuleGeometry(p.r, L, 4, 12), M[p.mat]);
+    if (L >= 1e-6) mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tv(norm(sub(p.b, p.a))));
+    mesh.position.copy(tv(mul(add(p.a, p.b), 0.5)));
+  } else if (p.kind === 'box') {
+    mesh = new THREE.Mesh(new THREE.BoxGeometry(p.w, p.l, p.d), M[p.mat]);
+    mesh.quaternion.copy(basisQ(cross(p.u, p.n), p.u, p.n)); mesh.position.copy(tv(p.center));
+  } else {
+    mesh = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 32), M[p.mat]);
+    mesh.quaternion.copy(basisQ(p.ax, cross(p.ay, p.ax), p.ay)); mesh.scale.set(p.rx, p.t, p.ry); mesh.position.copy(tv(p.center));
+  }
+  mesh.userData.id = p.id;
+  return mesh;
+}
+// Which hand a clicked part belongs to (the stick goes with the blocker), or null for the body.
+const handOf = id => id.startsWith('glove') ? 'glove' : id.startsWith('blocker') || ['paddle', 'shaft', 'blade'].includes(id) ? 'blocker' : null;
+
+// Hull cache: a part's hull is rebuilt only when its own geometry changes.
+const hullCache = new Map();
+const sig = p => JSON.stringify(p, (k, v) => k === 'mat' ? undefined : typeof v === 'number' ? Math.round(v * 1e5) : v);
+let pose, parts, hulls, lastRebuild = { n: 0, ms: 0 }, cov;
+function resolvePose(keepHandles) {
+  pose = solvePose(setup);
+  parts = goalieParts(pose);
+  goalieRoot.remove(goalieMesh); goalieMesh.traverse(o => o.geometry?.dispose());
+  goalieMesh = new THREE.Group(); for (const p of parts) goalieMesh.add(partMesh(p)); goalieRoot.add(goalieMesh);
+  const t0 = performance.now(); let n = 0;
+  hulls = parts.map(p => {
+    const s = sig(p), c = hullCache.get(p.id);
+    if (c && c.sig === s) return c.hull;
+    n++; const hull = dilatedHull(p); hullCache.set(p.id, { sig: s, hull }); return hull;
+  });
+  lastRebuild = { n, ms: performance.now() - t0 };
+  if (!keepHandles) for (const w of ['glove', 'blocker']) {
+    const h = pose[w], s = h.side;
+    handles[w].position.copy(tv(h.wrist));
+    handles[w].quaternion.setFromEuler(new THREE.Euler(-h.rot.pitch / DEG, s * h.rot.yaw / DEG, -s * h.rot.roll / DEG, 'YXZ'));
+  }
+}
+function placeGoalie() {
+  const st = STANCES[setup.stance];
+  if (setup.lock === 'post' && !st.post) setup.lock = 'arc';
+  if (setup.follow && setup.lock !== 'post') {
+    setup.facingDeg = Math.round(clamp(Math.atan2(puck.x, Math.max(puck.z, 0.05)) * DEG, -80, 80));
+    if (setup.lock === 'free') {   // stay the same distance out, slide onto the Puck's angle
+      const r = Math.hypot(setup.goalie.x, setup.goalie.z), f = setup.facingDeg / DEG;
+      setup.goalie = { x: r * Math.sin(f), z: r * Math.cos(f) };
+    }
+  }
+  const f = setup.facingDeg / DEG;
+  let r;
+  if (setup.lock === 'post') r = placeAtPost(pose, setup.stance, setup.facingDeg);
+  else if (setup.lock === 'arc') { const d = setup.arcR - frontReach(pose); r = { x: d * Math.sin(f), z: d * Math.cos(f) }; }
+  else r = setup.goalie;
+  setup.goalie = { x: r.x, z: r.z };
+  goalieRoot.position.set(r.x, 0, r.z); goalieRoot.rotation.y = f;
+  return { x: r.x, z: r.z, f };
+}
+function update({ pose: poseChanged = true, keepHandles = false, puckMoved = false } = {}) {
+  if (poseChanged) resolvePose(keepHandles);
+  const root = placeGoalie();
+  puckMesh.position.set(puck.x, 0, puck.z);
+  const P = V(puck.x, PUCK_HALF_T, puck.z);
+  const tw = performance.now();
+  const world = hulls.map(h => hullToWorld(h, root));
+  cov = computeCoverage(world, P);
+  cov.msWorld = performance.now() - tw - cov.ms;
+  cov.root = root;
+  draw();
+  if (puckMoved) refollowView();
+  if (variant === 'A' && tc.object === gizmoProxy && !tc.dragging) alignProxy(sel);
+  renderControls(); renderMaps(); renderWarn(); renderDrawer();
+}
+
+// ---------------- shared actions (every variant goes through these) ----------------
+let flashT;
+function flash(msg) { const el = $('#flash'); el.textContent = msg; el.classList.add('show'); clearTimeout(flashT); flashT = setTimeout(() => el.classList.remove('show'), 1200); }
+// The Puck stays on the ice: inside the boards (corners included), no further out than just past the blue line.
+function clampPuck(x, z) { puck.z = clamp(z, RINK.endZ + 0.1, RINK.blueZ + 2); const hw = rinkHalfW(puck.z) - 0.1; puck.x = clamp(x, -hw, hw); }
+function setPuck(x, z) { clampPuck(x, z); update({ pose: false, puckMoved: true }); }
+// Depth = how far out the toes are from the middle of the goal line. Setting it keeps the goalie's angle.
+const depthNow = () => setup.lock === 'arc' ? setup.arcR : Math.hypot(setup.goalie.x, setup.goalie.z) + frontReach(pose);
+function setDepth(r) { setup.lock = 'arc'; setup.arcR = clamp(r, 24 * IN, 157 * IN); update({ pose: false }); }
+const depthText = r => { const inch = Math.round(r / IN); return `${r.toFixed(2)} m (${Math.floor(inch / 12)}′${inch % 12}″)`; };
+// One step per wheel notch (+1 = wheel down, 0 = ignore). Many mice send a notch as two or more events in quick
+// succession, so a step is taken only when the direction changes or 80 ms have passed since the last step.
+let wheelT = 0, wheelDir = 0;
+function wheelNotches(e) {
+  const now = performance.now(), dir = Math.sign(e.deltaY);
+  if (!dir || (dir === wheelDir && now - wheelT < 80)) return 0;
+  wheelT = now; wheelDir = dir; return dir;
+}
+const ftIn = m => { const inch = Math.round(m / IN); return `${Math.floor(inch / 12)}′${inch % 12}″`; };
+// The mouse wheel over the Height or Depth slider steps it by an inch (wheel up = more).
+document.addEventListener('wheel', e => {
+  const t = e.target.closest('.heightIn, .depthIn'); if (!t || t.disabled) return;
+  e.preventDefault();
+  const n = wheelNotches(e); if (!n) return;
+  const k = -n;
+  if (t.classList.contains('heightIn')) { setup.heightM = clamp(Math.round(setup.heightM / IN) + k, 43, 79) * IN; update(); }
+  else setDepth((Math.round(depthNow() / IN) + k) * IN);
+}, { passive: false });
+// Moving the goalie by hand: snaps to its own post in RVH, and to the top of the crease; anywhere else is free.
+function moveGoalieTo(p) {
+  if (setup.follow) flash('Follow the Puck: off');
+  setup.follow = false;
+  const st = STANCES[setup.stance];
+  if (st.post) {
+    const f = st.post * RVH_TURN_DEG, q = placeAtPost(pose, setup.stance, f);
+    if (Math.hypot(p.x - q.x, p.z - q.z) < 0.35) {
+      if (setup.lock !== 'post') flash('Locked to the post');
+      setup.lock = 'post'; setup.facingDeg = f; return update({ pose: false });
+    }
+  }
+  const top = CREASE_RADIUS - frontReach(pose), r = Math.hypot(p.x, p.z);
+  if (p.z > 0.2 && Math.abs(r - top) < 0.12) {
+    if (!(setup.lock === 'arc' && setup.arcR === CREASE_RADIUS)) flash('Snapped to the top of the crease');
+    setup.lock = 'arc'; setup.arcR = CREASE_RADIUS; setup.facingDeg = Math.round(clamp(Math.atan2(p.x, p.z) * DEG, -80, 80));
+  } else {
+    setup.lock = 'free'; setup.goalie = { x: clamp(p.x, -4, 4), z: clamp(p.z, -0.3, 5) };
+  }
+  update({ pose: false });
+}
+function setFacing(deg) {
+  if (setup.follow) flash('Follow the Puck: off');
+  setup.follow = false; setup.facingDeg = Math.round(clamp(deg, -90, 90)); update({ pose: false });
+}
+function setStance(k) {
+  setup.stance = k; Object.assign(setup, defaultHands(k, setup.catchSide));
+  const post = STANCES[k].post;
+  if (post) { setup.lock = 'post'; setup.facingDeg = post * RVH_TURN_DEG; }
+  else if (setup.lock === 'post') { setup.lock = 'arc'; setup.arcR = CREASE_RADIUS; }
+  buildHandSliders(); update();
+}
+function setHandReq(w, vals) { setup[w] = { ...setup[w], ...vals }; update(); }
+const settleHand = w => { setup[w] = { ...pose[w].placedFrac }; };
+// Move a hand in the picture's plane by (mx, my) metres along the camera's right/up.
+function handScreenMove(w, mx, my) {
+  const cr = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0), cu = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+  const wd = cr.multiplyScalar(mx).add(cu.multiplyScalar(my));
+  const f = goalieRoot.rotation.y, c = Math.cos(f), s = Math.sin(f);
+  const lx = wd.x * c - wd.z * s, lz = wd.x * s + wd.z * c, side = handSide(w), H = setup.heightM, h = setup[w];
+  setHandReq(w, { out: h.out + side * lx / H, up: h.up + wd.y / H, fwd: h.fwd + lz / H });
+}
+// Ice directions as seen by the camera: r = screen right, f = screen up (away from the camera).
+function iceAxes() {
+  const cr = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+  let r = new THREE.Vector3(cr.x, 0, cr.z);
+  if (r.lengthSq() < 1e-6) r.set(1, 0, 0);
+  r.normalize();
+  return { r, f: new THREE.Vector3().crossVectors(new THREE.Vector3(0, 1, 0), r) };
+}
+const metresPerPx = dist => 2 * Math.max(dist, 0.5) * Math.tan(camera.fov / 2 / DEG) / canvas.clientHeight;
+
+// ---------------- drawing (decided: coverage variant D) ----------------
+let layer = new THREE.Group(); scene.add(layer);
+const labels = [];
+function clearLayer() {
+  scene.remove(layer); layer.traverse(o => { o.geometry?.dispose(); o.material?.dispose?.(); });
+  layer = new THREE.Group(); scene.add(layer);
+  labels.length = 0; $('#labels').innerHTML = '';
+}
+const flatMat = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide, depthWrite: false });
+function shapesMesh(shapes, color, opacity, z) {
+  if (!shapes.length) return;
+  const ts = shapes.map(s => { const sh = new THREE.Shape(s.outer.map(p => new THREE.Vector2(p.x, p.y))); sh.holes = s.holes.map(h => new THREE.Path(h.map(p => new THREE.Vector2(p.x, p.y)))); return sh; });
+  const m = new THREE.Mesh(new THREE.ShapeGeometry(ts), flatMat(color, opacity)); m.position.z = z; m.renderOrder = 2; layer.add(m);
+}
+function lines(pairs, color, opts = {}) {
+  const g = new THREE.BufferGeometry().setFromPoints(pairs.flat().map(tv));
+  const m = opts.dashed ? new THREE.LineDashedMaterial({ color, dashSize: 0.04, gapSize: 0.03, transparent: true, opacity: opts.opacity ?? 1 })
+    : new THREE.LineBasicMaterial({ color, transparent: true, opacity: opts.opacity ?? 1 });
+  const l = new THREE.LineSegments(g, m); if (opts.dashed) l.computeLineDistances(); l.renderOrder = 3; layer.add(l);
+}
+const R = SCORE_RECT;
+const rectCorners = (z = 0.004) => [V(R.x0, R.y0, z), V(R.x1, R.y0, z), V(R.x1, R.y1, z), V(R.x0, R.y1, z)];
+const loop = pts => pts.map((p, i) => [p, pts[(i + 1) % pts.length]]);
+function fan(P, ring, color, opacity) {
+  const pos = [];
+  for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; pos.push(P.x, P.y, P.z, a.x, a.y, 0, b.x, b.y, 0); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const m = new THREE.Mesh(g, flatMat(color, opacity)); m.renderOrder = 1; layer.add(m);
+}
+const P3 = () => V(puck.x, PUCK_HALF_T, puck.z);
+const pctText = v => `${v < 10 && v > 0 ? v.toFixed(1) : Math.round(v)}%`;
+function regionName(c) {
+  const P = P3(), pel = add(V(goalieRoot.position.x, 0, goalieRoot.position.z), V(pose.pelvis.x * Math.cos(cov.root.f), pose.pelvis.y, -pose.pelvis.x * Math.sin(cov.root.f)));
+  const t = P.z / Math.max(1e-3, P.z - pel.z), gx = P.x + (pel.x - P.x) * t;
+  const gloveSign = setup.catchSide === 'left' ? 1 : -1;
+  if (Math.abs(c.x - gx) < 0.14 && c.y < 0.45) return 'Five-hole';
+  const side = (c.x - gx) * gloveSign > 0 ? 'Glove side' : 'Blocker side';
+  return `${side} ${c.y > 0.78 ? 'high' : c.y > 0.32 ? 'mid' : 'low'}`;
+}
+function draw() {
+  clearLayer();
+  $('#noShot').style.display = cov.noShot ? 'block' : 'none';
+  const P = P3(), lanes = show.cone && currentView !== 'puck';
+  if (show.margin) lines(loop(rectCorners(0.006)), 0x334155, { dashed: true, opacity: 0.9 });
+  let named = [];
+  if (!cov.noShot) {
+    shapesMesh(cov.shadow, 0x0f172a, 0.82, 0.003);
+    shapesMesh(cov.open, 0x22c55e, 0.7, 0.002);
+    const holes = cov.open.filter(s => s.area / cov.rectArea > 0.002).sort((a, b) => b.area - a.area);
+    if (lanes) for (const s of holes) { fan(P, s.outer, 0x22c55e, 0.18); lines(loop(s.outer.map(p => V(p.x, p.y, 0.004))), 0x15803d); }
+    named = holes.slice(0, 6).map(s => [s, `${regionName(s.centroid)} ${pctText(100 * s.area / cov.rectArea)}`]);
+    for (const [s, text] of named) {
+      const el = document.createElement('div'); el.className = 'lbl'; el.textContent = text;
+      $('#labels').appendChild(el); labels.push({ el, pos: new THREE.Vector3(s.centroid.x, s.centroid.y, 0.01) });
+    }
+  }
+  $('#hPct').textContent = cov.noShot ? '–' : pctText(cov.pctCovered);
+  $('#hBar').style.width = `${cov.noShot ? 0 : cov.pctCovered}%`;
+  $('#hSub').textContent = cov.noShot ? 'No shot from behind the goal line' : `Open Net ${pctText(cov.pctOpen)} · ${Math.round(cov.rectArea * (cov.pctOpen / 100) / IN / IN)} sq in`;
+  $('#hList').innerHTML = named.length ? `<ol>${named.map(([, text]) => `<li>${text}</li>`).join('')}</ol>` : '';
+}
+
+// ---------------- top-down rink map (A's corner map in Puck's view, B's panel map) ----------------
+function rinkMap(svg) {
+  let drag = null, vb = null;
+  const pt = e => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse()); return { x: q.x, z: q.y }; };
+  svg.addEventListener('pointerdown', e => {
+    const k = e.target.closest('[data-drag]')?.dataset.drag; if (!k) return;
+    e.preventDefault(); svg.setPointerCapture(e.pointerId); stopSweep();
+    const p = pt(e);
+    drag = { k, off: { x: setup.goalie.x - p.x, z: setup.goalie.z - p.z }, pivot: { ...setup.goalie } };
+  });
+  svg.addEventListener('pointermove', e => {
+    if (!drag) return; const p = pt(e);
+    if (drag.k === 'puck') setPuck(p.x, p.z);
+    else if (drag.k === 'goalie') moveGoalieTo({ x: p.x + drag.off.x, z: p.z + drag.off.z });
+    else setFacing(Math.atan2(p.x - drag.pivot.x, p.z - drag.pivot.z) * DEG);
+  });
+  svg.addEventListener('pointerup', () => { drag = null; render(); });
+  function render() {
+    // The whole zone, boards to just past the blue line. Puck and goalie symbols keep a grabbable size on screen.
+    const w = svg.clientWidth || 1, h = svg.clientHeight || 1;
+    const x0 = -RINK.halfW - 0.4, x1 = RINK.halfW + 0.4, z0 = RINK.endZ - 0.4, z1 = RINK.blueZ + 2.5;
+    const s = Math.max((x1 - x0) / w, (z1 - z0) / h), cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    vb = [cx - s * w / 2, cz - s * h / 2, s * w, s * h];
+    svg.setAttribute('viewBox', vb.map(v => v.toFixed(3)).join(' '));
+    const g = setup.goalie, f = setup.facingDeg, CR = CREASE_RADIUS, nss = 'vector-effect="non-scaling-stroke"', px = n => (n * s).toFixed(3);
+    const gr = Math.max(0.45, 9 * s), knob = Math.max(0.9, 20 * s);
+    svg.innerHTML = `
+      <path d="M${BOARDS.map(([x, z]) => `${x.toFixed(2)},${z.toFixed(2)}`).join('L')}" fill="#f4f8fb" stroke="#334155" stroke-width="2" ${nss}/>
+      <rect x="${-RINK.halfW}" y="${RINK.blueZ}" width="${2 * RINK.halfW}" height="${RINK.blueW}" fill="#1d4ed8"/>
+      <path d="M${-CR},0 A${CR},${CR} 0 0 0 ${CR},0 Z" fill="#9fc6ea" stroke="#c8102e" stroke-width="1" ${nss}/>
+      <line x1="${-rinkHalfW(0)}" y1="0" x2="${rinkHalfW(0)}" y2="0" stroke="#c8102e" stroke-width="1.5" ${nss}/>
+      ${DOTS.map(([x, z]) => `<circle cx="${x}" cy="${z}" r="${RINK.circleR}" fill="none" stroke="#c8102e" stroke-width="1" ${nss}/><circle cx="${x}" cy="${z}" r="${FT}" fill="#c8102e"/>`).join('')}
+      ${HASHES.map(([[a, b], [c, d]]) => `<line x1="${a}" y1="${b}" x2="${c}" y2="${d}" stroke="#c8102e" stroke-width="1" ${nss}/>`).join('')}
+      ${[RINK.dotX, -RINK.dotX].map(x => `<circle cx="${x}" cy="${RINK.nzDotZ}" r="${FT}" fill="#c8102e"/>`).join('')}
+      <path d="M${-postX},0 L-1.1176,-0.66 L0,-1.1176 L1.1176,-0.66 L${postX},0" fill="#e2e8f0" stroke="#c8102e" stroke-width="2" ${nss}/>
+      ${cov.noShot ? '' : `<path d="M${puck.x},${puck.z} L${-postX},0 L${postX},0 Z" fill="#22c55e" fill-opacity=".2" stroke="#15803d" stroke-opacity=".6" stroke-width="1" ${nss}/>`}
+      <g transform="translate(${g.x} ${g.z}) rotate(${-f})">
+        <line x1="0" y1="0" x2="0" y2="${knob}" stroke="#1f3a5f" stroke-width="2" ${nss}/>
+        <ellipse rx="${gr}" ry="${gr / 2}" fill="#1f3a5f" data-drag="goalie" style="cursor:move"/>
+        <circle cy="${knob}" r="${px(5)}" fill="#fff" stroke="#1f3a5f" stroke-width="2" ${nss} data-drag="turn" style="cursor:grab"/>
+      </g>
+      <g data-drag="puck" style="cursor:move"><circle cx="${puck.x}" cy="${puck.z}" r="${px(10)}" fill="#f97316" fill-opacity=".3" stroke="#f97316" stroke-width="2" ${nss}/>
+        <circle cx="${puck.x}" cy="${puck.z}" r="${px(3.5)}" fill="#111"/></g>`;
+  }
+  return { render };
+}
+const mapA = rinkMap($('#insetA')), mapB = rinkMap($('#mapB'));
+function renderMaps() {
+  if (variant === 'A' && currentView === 'puck') mapA.render();
+  if (variant === 'B') mapB.render();
+}
+
+// ---------------- A: grab it in 3D ----------------
+const ray = new THREE.Raycaster(), mouse = new THREE.Vector2(), icePlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+function setRay(e) { const r = canvas.getBoundingClientRect(); mouse.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); ray.setFromCamera(mouse, camera); }
+function icePoint() { const p = new THREE.Vector3(); return ray.ray.intersectPlane(icePlane, p) ? { x: p.x, z: p.z } : null; }
+let aDrag = null, downAt = null;
+function select(k) { sel = k; refreshHelpers(); renderControls(); }
+function grab(e) { orbit.enabled = false; stopSweep(); canvas.setPointerCapture(e.pointerId); }
+
+// ---------------- C: tools + keyboard ----------------
+let cDrag = null, goalieTarget = null, lastNudge = 0;
+function setTool(t) { tool = t; refreshHelpers(); renderControls(); renderLegend(); }
+const LEGEND = {
+  puck: ['Drag anywhere to slide the Puck: up = toward the net. In Puck\'s view you walk with it.', '<kbd>←</kbd><kbd>→</kbd><kbd>↑</kbd><kbd>↓</kbd> nudge 25 cm (<kbd>Shift</kbd> 1 m)'],
+  goalie: ['Drag anywhere to move the goalie: snaps to the top of the crease and, in RVH, to its post.', 'Mouse wheel turns the goalie.', 'Arrows nudge 5 cm (<kbd>Shift</kbd> 20 cm).'],
+  glove: ['Drag to move the glove in the picture\'s plane; wheel pushes it out in front or pulls it in.', '<kbd>Shift</kbd>+drag: turn (sideways) and tilt (up/down). <kbd>Ctrl</kbd>+drag: twist.', 'Arrows nudge; <kbd>Shift</kbd>+arrows turn/tilt.'],
+};
+LEGEND.blocker = LEGEND.glove.map(s => s.replace(/glove/g, 'blocker'));
+function renderLegend() {
+  $('#legendC').innerHTML = `<b>${{ puck: 'Puck', goalie: 'Goalie', glove: 'Glove', blocker: 'Blocker' }[tool]} tool</b><ul>${LEGEND[tool].map(s => `<li>${s}</li>`).join('')}</ul>
+    <div class="always"><kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd><kbd>R</kbd> tools · <kbd>1</kbd>–<kbd>5</kbd> views · <kbd>S</kbd> stance · <kbd>C</kbd> catch side · <kbd>F</kbd> follow · right-drag looks around</div>`;
+}
+function cMove(dx, dy, e) {
+  const { r, f } = iceAxes();
+  if (tool === 'puck') {
+    const s = currentView === 'puck' ? 0.02 : metresPerPx(camera.position.distanceTo(puckMesh.position));
+    setPuck(puck.x + (r.x * dx - f.x * dy) * s, puck.z + (r.z * dx - f.z * dy) * s);
+  } else if (tool === 'goalie') {
+    const s = metresPerPx(camera.position.distanceTo(goalieRoot.position));
+    goalieTarget.x += (r.x * dx - f.x * dy) * s; goalieTarget.z += (r.z * dx - f.z * dy) * s;
+    moveGoalieTo(goalieTarget);
+  } else {
+    const h = setup[tool];
+    if (e.shiftKey) setHandReq(tool, { yaw: h.yaw + dx * 0.5, pitch: h.pitch - dy * 0.5 });
+    else if (e.ctrlKey) setHandReq(tool, { roll: h.roll + dx * 0.5 });
+    else { const s = metresPerPx(camera.position.distanceTo(handles[tool].getWorldPosition(new THREE.Vector3()))); handScreenMove(tool, dx * s, -dy * s); }
+  }
+}
+function cNudge(dx, dy, shift) {     // dx: screen right, dy: screen up
+  const { r, f } = iceAxes();
+  if (tool === 'puck') { const s = shift ? 1 : 0.25; setPuck(puck.x + (r.x * dx + f.x * dy) * s, puck.z + (r.z * dx + f.z * dy) * s); }
+  else if (tool === 'goalie') {
+    const now = performance.now(); if (!goalieTarget || now - lastNudge > 1500) goalieTarget = { ...setup.goalie }; lastNudge = now;
+    const s = shift ? 0.2 : 0.05; goalieTarget.x += (r.x * dx + f.x * dy) * s; goalieTarget.z += (r.z * dx + f.z * dy) * s;
+    moveGoalieTo(goalieTarget);
+  } else {
+    const h = setup[tool];
+    if (shift) setHandReq(tool, { yaw: h.yaw + 3 * dx, pitch: h.pitch + 3 * dy }); else handScreenMove(tool, 0.02 * dx, 0.02 * dy);
+    settleHand(tool);
+  }
+}
+
+// ---------------- pointer + wheel on the 3D view ----------------
+canvas.addEventListener('pointerdown', e => {
+  downAt = null;
+  if (e.button !== 0) return;
+  if (variant === 'A') {
+    if (tc.dragging || tc.axis) return;
+    setRay(e);
+    const hand = ray.intersectObjects([handles.glove, handles.blocker])[0];
+    if (hand) return select(hand.object === handles.glove ? 'glove' : 'blocker');
+    if (sel === 'goalie' && ray.intersectObject(turnKnob)[0]) { aDrag = { k: 'turn', pivot: { ...setup.goalie } }; return grab(e); }
+    if (ray.intersectObject(puckHit)[0]) { select('puck'); aDrag = { k: 'puck' }; return grab(e); }
+    const part = ray.intersectObjects(goalieMesh.children)[0];
+    if (part) {
+      const w = handOf(part.object.userData.id);
+      if (w) return select(w);
+      select('goalie'); const p = icePoint() || setup.goalie;
+      aDrag = { k: 'goalie', off: { x: setup.goalie.x - p.x, z: setup.goalie.z - p.z } }; return grab(e);
+    }
+    downAt = { x: e.clientX, y: e.clientY };
+  } else if (variant === 'C') {
+    stopSweep(); canvas.setPointerCapture(e.pointerId);
+    cDrag = { x: e.clientX, y: e.clientY };
+    if (tool === 'goalie') goalieTarget = { ...setup.goalie };
+  }
+});
+canvas.addEventListener('pointermove', e => {
+  if (variant === 'A' && aDrag) {
+    setRay(e); const p = icePoint(); if (!p) return;
+    if (aDrag.k === 'puck') { clampPuck(p.x, p.z); update({ pose: false }); }   // the camera refollows on release
+    else if (aDrag.k === 'goalie') moveGoalieTo({ x: p.x + aDrag.off.x, z: p.z + aDrag.off.z });
+    else setFacing(Math.atan2(p.x - aDrag.pivot.x, p.z - aDrag.pivot.z) * DEG);
+  } else if (variant === 'C' && cDrag) {
+    const dx = e.clientX - cDrag.x, dy = e.clientY - cDrag.y; cDrag.x = e.clientX; cDrag.y = e.clientY;
+    if (dx || dy) cMove(dx, dy, e);
+  }
+});
+canvas.addEventListener('pointerup', e => {
+  if (variant === 'A') {
+    if (aDrag) { const k = aDrag.k; aDrag = null; orbit.enabled = true; if (k === 'puck') refollowView(); }
+    else if (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 4) select(null);   // a click on empty space
+    downAt = null;
+  } else if (variant === 'C' && cDrag) {
+    cDrag = null;
+    if (tool === 'glove' || tool === 'blocker') { settleHand(tool); update(); }
+  }
+});
+canvas.addEventListener('wheel', e => {
+  if (variant === 'A' && sel === 'goalie' && setup.lock !== 'post') { e.preventDefault(); const n = wheelNotches(e); if (n) setDepth((Math.round(depthNow() / IN) - n) * IN); return; }   // wheel up = 1 inch further out
+  if (variant === 'A' && (sel === 'glove' || sel === 'blocker')) {   // depth along the shot: wheel up = toward the Puck
+    e.preventDefault(); const n = wheelNotches(e); if (!n) return;
+    moveHandToWorld(sel, handWorld(sel).add(shotDir(sel).multiplyScalar(-0.02 * n)));
+    settleHand(sel); update(); return;
+  }
+  if (variant !== 'C' || tool === 'puck') return;
+  e.preventDefault();
+  const k = wheelNotches(e); if (!k) return;
+  if (tool === 'goalie') setFacing(setup.facingDeg - 5 * k);
+  else { setHandReq(tool, { fwd: setup[tool].fwd - 0.01 * k }); settleHand(tool); }
+}, { passive: false });
+
+// ---------------- keyboard ----------------
+addEventListener('keydown', e => {
+  if (e.target.closest('input, textarea, [contenteditable]')) return;
+  if (e.key === '[') return cycle(-1);
+  if (e.key === ']') return cycle(1);
+  const key = e.key.toLowerCase();
+  if (variant === 'A') {
+    if (key === 'w' && (sel === 'glove' || sel === 'blocker')) setMode('translate');
+    if (key === 'e' && (sel === 'glove' || sel === 'blocker')) setMode('rotate');
+    if (e.key === 'Escape') select(null);
+  } else if (variant === 'C') {
+    const tools = { q: 'puck', w: 'goalie', e: 'glove', r: 'blocker' }, views = ['puck', 'shooter', 'top', 'behind', 'orbit'];
+    if (tools[key]) return setTool(tools[key]);
+    if (key >= '1' && key <= '5') return setView(views[+key - 1]);
+    if (key === 'f') { setup.follow = !setup.follow; flash(`Follow the Puck: ${setup.follow ? 'on' : 'off'}`); return update({ pose: false }); }
+    if (key === 's') { const ks = Object.keys(STANCES); setStance(ks[(ks.indexOf(setup.stance) + 1) % ks.length]); return flash(STANCES[setup.stance].label); }
+    if (key === 'c') { setup.catchSide = setup.catchSide === 'left' ? 'right' : 'left'; flash(`Catches ${setup.catchSide}`); return update(); }
+    const arrows = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, 1], ArrowDown: [0, -1] }[e.key];
+    if (arrows) { e.preventDefault(); cNudge(arrows[0], arrows[1], e.shiftKey); }
+  }
+});
+
+// ---------------- panel wiring (shared by every variant's controls) ----------------
+$$('.stances').forEach(el => el.innerHTML = Object.entries(STANCES).map(([k, v]) => `<button data-stance="${k}">${v.label}</button>`).join(''));
+$$('.puckSpots').forEach(el => el.innerHTML = PUCK_SPOTS.map(([n], i) => `<button data-puck="${i}">${n}</button>`).join(''));
+const HAND_KEYS = [['out', 'Out to the side'], ['up', 'Off the ice'], ['fwd', 'Out in front'], ['yaw', 'Turn out'], ['pitch', 'Tilt up'], ['roll', 'Twist out']];
+function buildHandSliders() {
+  const c = DEFAULT_CLAMPS[setup.stance];
+  for (const w of ['glove', 'blocker']) $('#sl-' + w).innerHTML = HAND_KEYS.map(([k, label]) => {
+    const [lo, hi] = c[w][k], step = ROT_KEYS.includes(k) ? 1 : 0.002;
+    return `<div class="row"><label>${label}</label><input type="range" data-hand="${w}" data-key="${k}" min="${lo}" max="${hi}" step="${step}"><span class="val" data-handval="${w}-${k}"></span></div>`;
+  }).join('');
+}
+document.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b || b.closest('#switcher')) return;
+  const d = b.dataset;
+  if (d.stance) setStance(d.stance);
+  else if (d.catch) { setup.catchSide = d.catch; update(); }
+  else if (d.arc) { setup.lock = 'arc'; setup.arcR = ARCS[d.arc]; update({ pose: false }); }
+  else if ('post' in d) { const post = STANCES[setup.stance].post; if (post) { setup.lock = 'post'; setup.facingDeg = post * RVH_TURN_DEG; update({ pose: false }); } }
+  else if (d.puck) { stopSweep(); const [, x, z] = PUCK_SPOTS[+d.puck]; setPuck(x, z); }
+  else if ('sweep' in d) toggleSweep();
+  else if (d.step) { const k = +d.dir; if (d.step === 'height') { setup.heightM = clamp(Math.round(setup.heightM / IN) + k, 43, 79) * IN; update(); } else if (setup.lock !== 'post') setDepth((Math.round(depthNow() / IN) + k) * IN); }
+  else if (d.view) setView(d.view);
+  else if (d.tool) setTool(d.tool);
+  else if (d.mode) setMode(d.mode);
+  else if (d.resetHand) {
+    const def = defaultHands(setup.stance, setup.catchSide), w = d.resetHand === 'sel' ? sel : d.resetHand;
+    if (w === 'all') Object.assign(setup, def); else setup[w] = def[w];
+    update();
+  }
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.classList.contains('heightIn')) { setup.heightM = +t.value; update(); }
+  else if (t.classList.contains('facingIn')) setFacing(+t.value);
+  else if (t.classList.contains('depthIn')) setDepth(+t.value);
+  else if (t.dataset.hand) setHandReq(t.dataset.hand, { [t.dataset.key]: +t.value });
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.classList.contains('followBox')) { setup.follow = t.checked; update({ pose: false }); }
+  else if (t.classList.contains('showCone')) { show.cone = t.checked; update({ pose: false }); }
+  else if (t.classList.contains('showMargin')) { show.margin = t.checked; update({ pose: false }); }
+});
+
+function renderControls() {
+  const st = STANCES[setup.stance], notActive = el => el !== document.activeElement;
+  $$('[data-stance]').forEach(b => b.classList.toggle('on', b.dataset.stance === setup.stance));
+  $$('[data-catch]').forEach(b => b.classList.toggle('on', b.dataset.catch === setup.catchSide));
+  $$('[data-arc]').forEach(b => b.classList.toggle('on', setup.lock === 'arc' && Math.abs(setup.arcR - ARCS[b.dataset.arc]) < 1e-6));
+  $$('[data-post]').forEach(b => { b.classList.toggle('on', setup.lock === 'post'); b.disabled = !st.post; b.title = st.post ? '' : 'RVH only'; });
+  $$('[data-tool]').forEach(b => b.classList.toggle('on', b.dataset.tool === tool));
+  $$('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === tc.mode));
+  $$('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === currentView));
+  $$('.heightIn').forEach(i => { if (notActive(i)) i.value = setup.heightM; });
+  $$('.heightVal').forEach(s => s.textContent = `${ftIn(setup.heightM)} (${setup.heightM.toFixed(2)} m)`);
+  $$('.facingIn').forEach(i => { if (notActive(i)) i.value = setup.facingDeg; });
+  $$('.facingVal').forEach(s => s.textContent = `${setup.facingDeg}°`);
+  if (pose) { const dn = depthNow();
+    $$('.depthIn').forEach(i => { if (notActive(i)) i.value = dn; i.disabled = setup.lock === 'post'; });
+    $$('.depthVal').forEach(s => s.textContent = setup.lock === 'post' ? 'at the post' : depthText(dn)); }
+  $$('.followBox').forEach(i => { i.checked = setup.follow; i.disabled = setup.lock === 'post'; });
+  $$('.showCone').forEach(i => i.checked = show.cone);
+  $$('.showMargin').forEach(i => i.checked = show.margin);
+  if (pose) $$('[data-hand][data-key]').forEach(i => {
+    const w = i.dataset.hand, k = i.dataset.key, v = pose[w].placedFrac[k];
+    if (notActive(i)) i.value = v;
+    const out = $(`[data-handval="${w}-${k}"]`); if (out) out.textContent = ROT_KEYS.includes(k) ? `${Math.round(v)}°` : `${Math.round(v * setup.heightM * 100)} cm`;
+  });
+  const insp = sel === 'glove' || sel === 'blocker' ? 'hand' : sel || 'none';
+  $$('[data-insp]').forEach(d => d.style.display = d.dataset.insp === insp ? '' : 'none');
+  $('#inspHandTitle').textContent = sel === 'glove' ? 'Glove Hand' : 'Blocker Hand (and stick)';
+}
+function renderWarn() {
+  const msgs = ['glove', 'blocker'].filter(w => pose[w].flags.length).map(w => `${w === 'glove' ? 'Glove' : 'Blocker'} held back: ${pose[w].flags.join(', ')}`);
+  $('#warn').style.display = msgs.length ? 'block' : 'none'; $('#warn').textContent = msgs.join(' · ');
+}
+// What's on screen in each variant besides its own controls.
+function refreshHelpers() {
+  const A = variant === 'A', C = variant === 'C';
+  handles.glove.visible = A || (C && tool === 'glove');
+  handles.blocker.visible = A || (C && tool === 'blocker');
+  puckRing.visible = (A || (C && tool === 'puck')) && currentView !== 'puck';   // up close in Puck's view the ring would fill the screen
+  turnRing.visible = A && sel === 'goalie';
+  const handSel = A && (sel === 'glove' || sel === 'blocker');
+  if (handSel && tc.mode === 'translate') { if (!tc.dragging) alignProxy(sel); if (tc.object !== gizmoProxy) tc.attach(gizmoProxy); tc.setSpace('local'); }
+  else if (handSel) { if (tc.object !== handles[sel]) tc.attach(handles[sel]); tc.setSpace('local'); }
+  else tc.detach();
+  orbit.enableZoom = !C && !handSel && !(A && sel === 'goalie');   // in A the wheel moves a selected hand along the shot, or sets a selected goalie's depth
+  const inset = A && currentView === 'puck';
+  $('#insetA').style.display = $('#insetCap').style.display = inset ? '' : 'none';
+  if (inset) mapA.render();
+}
+
+// Sweep: the Puck skates an arc across the slot so you can watch everything update live.
+let sweepT0 = null;
+function stopSweep() { sweepT0 = null; $$('[data-sweep]').forEach(b => b.textContent = '▶ Sweep across the slot'); }
+function toggleSweep() { if (sweepT0 !== null) return stopSweep(); sweepT0 = performance.now(); $$('[data-sweep]').forEach(b => b.textContent = '■ Stop sweep'); }
+
+// Views (decided in the coverage prototype). All follow the Puck except Free orbit.
+function viewPose(k) {
+  const d = Math.hypot(puck.x, puck.z) || 1, ux = puck.x / d, uz = puck.z / d;
+  if (k === 'puck') {
+    // Just behind and above the Puck, on its line to the net, zoomed so the Puck sits at the bottom with the whole net above it.
+    const cam = new THREE.Vector3(puck.x + ux * 1.4, PUCK_HALF_T + 0.25, puck.z + uz * 1.4), target = new THREE.Vector3(0, MOUTH_H / 2, 0);
+    const look = target.clone().sub(cam).normalize(), right = new THREE.Vector3().crossVectors(look, new THREE.Vector3(0, 1, 0)).normalize();
+    const upv = new THREE.Vector3().crossVectors(right, look);
+    const half = (p, margin) => { const v = p.clone().sub(cam), z = Math.max(v.dot(look), 0.05);   // half vertical fov that fits p
+      return Math.max(Math.atan(Math.abs(v.dot(upv)) / z), Math.atan(Math.abs(v.dot(right)) / z / camera.aspect)) * DEG * margin; };
+    const need = Math.max(half(new THREE.Vector3(puck.x, 0, puck.z), 1.35),
+      ...[[-postX, postH], [postX, postH], [-postX, 0], [postX, 0]].map(([x, y]) => half(new THREE.Vector3(x, y, 0), 1.15)));
+    return { pos: cam.toArray(), target: target.toArray(), fov: clamp(2 * need, 20, 100) };
+  }
+  // Shooter's view: far enough back, and aimed low enough, that the Puck stays in the bottom of the picture.
+  if (k === 'shooter') return { pos: [puck.x + ux * 3, 1.3, puck.z + uz * 3], target: [puck.x * 0.3, 0.45, puck.z * 0.3], fov: 44 };
+  if (k === 'top') { const cx = puck.x / 2, cz = Math.max(puck.z, 0) / 2 + 0.3, h = Math.max(4.5, d * 1.3 + 2); return { pos: [cx, h, cz + 0.01], target: [cx, 0, cz] }; }
+  if (k === 'behind') return { pos: [0, 1.7, -3.2], target: [puck.x * 0.3, 0.5, 1 + Math.max(0, puck.z) * 0.2] };
+  return { pos: [0, 19, 33], target: [0, 0, 7.5] };   // free orbit starts over the whole zone, from above the blue line
+}
+function setView(k) {
+  const changed = currentView !== k;
+  currentView = k; const v = viewPose(k);
+  if (changed && cov) draw();
+  camera.position.set(...v.pos); orbit.target.set(...v.target);
+  camera.fov = v.fov ?? 40; camera.updateProjectionMatrix(); orbit.update(); camera.updateMatrixWorld();
+  if (changed) { refreshHelpers(); renderControls(); renderDrawer(); }
+}
+function refollowView() { if (currentView !== 'orbit') setView(currentView); }
+// Orbiting by hand out of Puck's view leaves the Puck, so it becomes Free orbit: the Puck shows again where the camera was.
+let userOrbiting = false;
+orbit.addEventListener('start', () => { userOrbiting = true; });
+orbit.addEventListener('end', () => { userOrbiting = false; });
+orbit.addEventListener('change', () => {
+  if (!userOrbiting || currentView !== 'puck') return;
+  currentView = 'orbit'; camera.fov = 40; camera.updateProjectionMatrix();
+  draw(); refreshHelpers(); renderControls(); renderDrawer();
+  flash("Free orbit: press Puck's view to go back to the Puck");
+});
+
+// ---------------- prototype chrome: switcher + drawer ----------------
+function setVariant(k) {
+  variant = k; const v = VARIANTS.find(x => x.key === k);
+  document.body.className = 'v-' + k;
+  $('#vLabel').textContent = `${v.key} (${v.name})`;
+  const u = new URL(location.href); u.searchParams.set('variant', k); history.replaceState(null, '', u);
+  aDrag = cDrag = null; orbit.enabled = true;
+  if (k === 'C') { orbit.mouseButtons = { LEFT: -1, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE }; orbit.enableZoom = false; }
+  else { orbit.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN }; orbit.enableZoom = true; }
+  resize(); refreshHelpers(); renderLegend(); update({ pose: false });
+}
+const cycle = dir => { const i = VARIANTS.findIndex(v => v.key === variant); setVariant(VARIANTS[(i + dir + VARIANTS.length) % VARIANTS.length].key); };
+$('#prevV').onclick = () => cycle(-1); $('#nextV').onclick = () => cycle(1);
+let drawer = null;
+const JUDGE = `<h4>Things to judge</h4><ul>
+  <li><b>Moving the Puck from Puck's view</b> (the app opens there): the corner map (A), the always-there rink map (B), or walking it with drag and arrow keys (C)?</li>
+  <li><b>Moving the goalie:</b> drag it in the scene (A), drag it on a map and use position buttons (B), or the Goalie tool (C)? Do the snaps to the top of the crease and to the post help, or get in the way?</li>
+  <li><b>Turning the goalie:</b> the ring knob (A), the map knob and Facing slider (B), or the mouse wheel (C)?</li>
+  <li><b>Follow the Puck</b> (square to it and on its angle): keep it? On by default? It switches off as soon as you move or turn the goalie yourself.</li>
+  <li><b>Hands:</b> 3D gizmo arrows and rings (A), named sliders (B), or drag in the picture with Shift/Ctrl for the wrist (C)? Which gets you "glove a bit higher and turned out" fastest, and does it work in Puck's view?</li>
+  <li><b>Stance, catch side and height:</b> in a card for the selected goalie (A), a side panel (B), or a top bar with keys (C)?</li>
+  <li><b>Untested extras:</b> the orange ring on the Puck, Puck spot buttons (Slot, Dot…), Depth buttons (Top / Mid / Deep), Sweep. Keep, change or drop?</li>
+  <li><b>Views:</b> buttons (A, B) or number keys (C)?</li>
+</ul><div class="hint" style="color:#9ca3af">Switch variants with ‹ › or the <kbd>[</kbd> <kbd>]</kbd> keys.</div>`;
+const r2 = v => Math.round(v * 100) / 100, rh = h => Object.fromEntries(Object.entries(h).map(([k, v]) => [k, ROT_KEYS.includes(k) ? Math.round(v) : Math.round(v * 1000) / 1000]));
+function renderDrawer() {
+  const el = $('#drawer'); el.style.display = drawer ? 'block' : 'none';
+  if (drawer === 'judge') { if (!el.dataset.judge) { el.innerHTML = JUDGE; el.dataset.judge = 1; } return; }
+  delete el.dataset.judge;
+  if (drawer !== 'state' || !pose) return;
+  const s = { stance: setup.stance, heightM: setup.heightM, catchSide: setup.catchSide,
+    goalie: { x: r2(setup.goalie.x), z: r2(setup.goalie.z), facingDeg: setup.facingDeg, lock: setup.lock, ...(setup.lock === 'arc' ? { arcR: r2(setup.arcR) } : {}), follow: setup.follow },
+    glove: rh(setup.glove), blocker: rh(setup.blocker), puck: { x: r2(puck.x), z: r2(puck.z) }, view: currentView, show };
+  el.innerHTML = `<h4>Setup (what a shared link would hold)</h4><pre>${JSON.stringify(s, null, 1)}</pre><div id="perf"></div>`;
+}
+$('#judgeBtn').onclick = () => { drawer = drawer === 'judge' ? null : 'judge'; renderDrawer(); };
+$('#stateBtn').onclick = () => { drawer = drawer === 'state' ? null : 'state'; renderDrawer(); };
+
+function resize() { const r = view.getBoundingClientRect(); renderer.setSize(r.width, r.height); camera.aspect = r.width / r.height; camera.updateProjectionMatrix(); }
+addEventListener('resize', resize);
+
+// Render loop: sweep, label positions, perf readout.
+let frames = 0, fps = 0, fpsT = performance.now(), worst = 0;
+renderer.setAnimationLoop(now => {
+  if (sweepT0 !== null) {
+    const a = Math.sin((now - sweepT0) / 1000 * 2 * Math.PI / 7) * 65 / DEG;
+    setPuck(6 * Math.sin(a), 6 * Math.cos(a));
+  }
+  const r = canvas.getBoundingClientRect();
+  for (const l of labels) {
+    const p = l.pos.clone().project(camera), vis = p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1;
+    l.el.style.display = vis ? 'block' : 'none';
+    l.el.style.left = `${(p.x + 1) / 2 * r.width}px`; l.el.style.top = `${(1 - p.y) / 2 * r.height}px`;
+  }
+  const tag = $('#puckTag'), tp = new THREE.Vector3(puck.x, 2 * PUCK_HALF_T, puck.z).project(camera);
+  const tagVis = puckMesh.visible && tp.z < 1 && Math.abs(tp.x) < 1 && Math.abs(tp.y) < 1;
+  tag.style.display = tagVis ? 'block' : 'none';
+  if (tagVis) { tag.style.left = `${(tp.x + 1) / 2 * r.width}px`; tag.style.top = `${(1 - tp.y) / 2 * r.height - 14}px`; }
+  $('#youArePuck').style.display = currentView === 'puck' ? 'block' : 'none';
+  renderer.render(scene, camera);
+  frames++; if (now - fpsT > 1000) { fps = Math.round(frames * 1000 / (now - fpsT)); frames = 0; fpsT = now; worst = 0; }
+  if (cov) { worst = Math.max(worst, cov.ms + cov.msWorld);
+    const perf = $('#perf'); if (perf) perf.textContent = `coverage ${(cov.ms + cov.msWorld).toFixed(1)} ms (worst ${worst.toFixed(1)}) · hulls rebuilt ${lastRebuild.n}/${parts.length} in ${lastRebuild.ms.toFixed(1)} ms · ${fps} fps`; }
+});
+
+buildHandSliders(); resize(); update(); setMode('translate');
+setView(params.get('view') || 'puck');
+setVariant(variant);
+</script>
+</body>
+</html>
