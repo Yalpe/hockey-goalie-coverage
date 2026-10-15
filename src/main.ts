@@ -1,10 +1,15 @@
 import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { goalieParts } from './coverage/parts';
 import { PUCK_HALF_T } from './dims';
+import { defaultGoalie, placeGoalie, setHeightIn, setStance } from './goalie';
+import { solvePose } from './posing/posing';
+import { createGoalieMesh } from './scene/goalieMesh';
 import { buildNet } from './scene/net';
 import { buildPuck, DEFAULT_PUCK, type PuckSpot } from './scene/puck';
 import { buildRink } from './scene/rink';
+import { goalieCard } from './ui/goalieCard';
 import { VIEWS, viewPose, type ViewKey } from './views';
 
 const $ = <T extends HTMLElement = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
@@ -31,6 +36,29 @@ scene.add(puckMesh.group);
 
 const puck: PuckSpot = { ...DEFAULT_PUCK };
 puckMesh.group.position.set(puck.x, 0, puck.z);
+
+// ---------------- goalie ----------------
+const goalie = defaultGoalie();
+const goalieRoot = new THREE.Group();   // placed and turned like the goalie; the mesh lives in the goalie's own frame
+const goalieMesh = createGoalieMesh();
+goalieRoot.add(goalieMesh.group);
+scene.add(goalieRoot);
+
+const card = goalieCard($('#goalieCard'), {
+  stance: k => { setStance(goalie, k); updateGoalie(); },
+  catchSide: c => { goalie.catchSide = c; updateGoalie(); },
+  heightIn: n => { setHeightIn(goalie, n); updateGoalie(); },
+});
+
+function updateGoalie() {
+  const pose = solvePose(goalie);
+  goalieMesh.update(goalieParts(pose));
+  const at = placeGoalie(goalie, pose);
+  goalieRoot.position.set(at.x, 0, at.z);
+  goalieRoot.rotation.y = at.facingDeg * Math.PI / 180;
+  card.render(goalie);
+}
+updateGoalie();
 
 // ---------------- views ----------------
 let currentView: ViewKey = 'puck';
