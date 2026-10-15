@@ -22,9 +22,10 @@ html, body {
 /* View presets, top-left */
 #viewbar {
   position: absolute; top: 12px; left: 12px; z-index: 5;
-  display: flex; gap: 6px; flex-wrap: wrap;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
   max-width: calc(100% - 280px);
 }
+#viewbar .views { display: flex; gap: 6px; flex-wrap: wrap; }
 #viewbar button {
   font: inherit; font-weight: 600;
   border: 1px solid var(--line); background: rgba(255, 255, 255, .94); color: var(--ink);
@@ -143,3 +144,28 @@ kbd {
 }
 #coverageCard ol { margin: 8px 0 0; padding-left: 20px; font-size: 13px; font-variant-numeric: tabular-nums; }
 #coverageCard ol[hidden] { display: none; }
+
+/* Setup name caption and Copy link, top centre */
+#setupBar {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 6;
+  display: flex; gap: 6px; align-items: center;
+}
+#setupName {
+  width: 220px; font: inherit; font-size: 16px; font-weight: 700; color: var(--ink); text-align: center;
+  background: rgba(255, 255, 255, .7); border: 1px solid transparent; border-radius: 8px; padding: 4px 10px;
+}
+#setupName::placeholder { color: #94a3b8; font-weight: 600; }
+#setupName:hover { border-color: var(--line); background: rgba(255, 255, 255, .9); }
+#setupName:focus { outline: none; border-color: var(--accent); background: #fff; }
+#copyLink {
+  font: inherit; font-weight: 600; border: 1px solid var(--line); background: rgba(255, 255, 255, .94); color: var(--ink);
+  border-radius: 8px; padding: 5px 11px; cursor: pointer; box-shadow: 0 1px 4px rgba(0, 0, 0, .12); white-space: nowrap;
+}
+#copyLink:hover { border-color: var(--accent); }
+/* Narrower laptops: the caption drops a row so it clears the view buttons, and the notes under it move down. */
+@media (max-width: 1359px) {
+  #setupBar { top: 52px; }
+  #youArePuck { top: 96px; }
+  #noShot { top: 128px; }
+  #flash { top: 160px; }
+}

@@ -6,7 +6,7 @@ import { nameHoles } from './coverage/holes';
 import { goalieParts } from './coverage/parts';
 import { IN, PUCK_HALF_T } from './dims';
 import {
-  defaultGoalie, depthNow, DEPTH_SPOTS, lockToPost, moveGoalieTo, placeGoalie, setDepth, setFacing, setHeightIn, setStance,
+  depthNow, DEPTH_SPOTS, lockToPost, moveGoalieTo, placeGoalie, quantHand, setDepth, setFacing, setHeightIn, setStance,
 } from './goalie';
 import { defaultHands, solvePose, type HandKey, type Pose } from './posing/posing';
 import { createCoverageLayer } from './scene/coverageLayer';
@@ -14,13 +14,14 @@ import { createGoalieHelpers } from './scene/goalieHelpers';
 import { createGoalieMesh } from './scene/goalieMesh';
 import { createHandGizmo, type GizmoMode } from './scene/handGizmo';
 import { buildNet } from './scene/net';
-import { buildPuck, clampPuck, DEFAULT_PUCK, type PuckSpot } from './scene/puck';
+import { buildPuck, clampPuck, type PuckSpot } from './scene/puck';
 import { buildRink } from './scene/rink';
 import { cornerMap } from './ui/cornerMap';
 import { holeLabels } from './ui/holeLabels';
 import { coverageCard } from './ui/coverageCard';
 import { goalieCard } from './ui/goalieCard';
 import { wheelNotches } from './ui/wheel';
+import { BadLink, decodeSetup, defaultSetup, encodeSetup, NAME_MAX, type Setup } from './setup';
 import { VIEWS, viewPose, type ViewKey } from './views';
 
 const $ = <T extends Element = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
@@ -48,12 +49,20 @@ const orbit = new OrbitControls(camera, canvas);
 scene.add(buildRink(), buildNet());
 
 // ---------------- state ----------------
-const puck: PuckSpot = { ...DEFAULT_PUCK };
-const goalie = defaultGoalie();
-const show = { cone: true, margin: true };
+/** The Setup in the address bar, or the default one. bad: there was a hash, but it couldn't be read. */
+function readHash(): { setup: Setup; bad: boolean } {
+  if (!location.hash || location.hash === '#') return { setup: defaultSetup(), bad: false };
+  try { return { setup: decodeSetup(location.hash), bad: false }; }
+  catch (e) { if (e instanceof BadLink) return { setup: defaultSetup(), bad: true }; throw e; }
+}
+const opened = readHash();
+const puck: PuckSpot = { ...opened.setup.puck };
+const goalie = opened.setup.goalie;
+const show = { ...opened.setup.show };
+let setupName = opened.setup.name;
 type Selection = 'puck' | 'goalie' | HandKey | null;
 let sel: Selection = null;
-let currentView: ViewKey = 'puck';
+let currentView: ViewKey = opened.setup.view;
 let pose: Pose;
 let hulls: Hull[] = [];
 let cov: Coverage;
@@ -77,11 +86,11 @@ const handSide = (w: HandKey) => (w === 'glove') === (goalie.catchSide === 'left
 /** Asks for hand w at world position p; the posing module clamps it to the Stance's limits and arm reach. */
 function moveHandToWorld(w: HandKey, p: THREE.Vector3) {
   const l = goalieRoot.worldToLocal(p.clone()), s = handSide(w), H = goalie.heightM;
-  goalie[w] = { ...goalie[w], out: l.x * s / H, up: l.y / H, fwd: l.z / H };
+  goalie[w] = quantHand({ ...goalie[w], out: l.x * s / H, up: l.y / H, fwd: l.z / H });
   updatePose();
 }
 /** Takes where a held-back hand actually ended up as its new setting. */
-const settleHand = (w: HandKey) => { goalie[w] = { ...pose[w].placedFrac }; };
+const settleHand = (w: HandKey) => { goalie[w] = quantHand(pose[w].placedFrac); };
 
 const gizmo = createHandGizmo({
   camera, canvas, scene, hands: helpers.hands, puck,
@@ -89,7 +98,7 @@ const gizmo = createHandGizmo({
   onTurn: (w, ball) => {
     const p = ball.position, s = handSide(w), H = goalie.heightM;
     const e = new THREE.Euler().setFromQuaternion(ball.quaternion, 'YXZ');
-    goalie[w] = { out: p.x * s / H, up: p.y / H, fwd: p.z / H, yaw: s * e.y * DEG, pitch: -e.x * DEG, roll: -s * e.z * DEG };
+    goalie[w] = quantHand({ out: p.x * s / H, up: p.y / H, fwd: p.z / H, yaw: s * e.y * DEG, pitch: -e.x * DEG, roll: -s * e.z * DEG });
     updatePose(true);
   },
   onDragging: (on, w) => {
@@ -183,6 +192,7 @@ function updateCoverage() {
   $('#noShot').style.display = cov.noShot ? 'block' : 'none';
   renderMap();
   gizmo.realign();   // the shot runs from the Puck through the hand, so the arrows follow both
+  scheduleSave();
 }
 
 /** Moves the Puck, kept on the ice. refollow: bring a following view along now (not while dragging it in 3D). */
@@ -199,7 +209,7 @@ function renderMap() {
 
 // ---------------- views ----------------
 const viewbar = $('#viewbar');
-viewbar.innerHTML = VIEWS.map(({ key, label }) => `<button type="button" data-view="${key}">${label}</button>`).join('') + `
+viewbar.innerHTML = `<div class="views">${VIEWS.map(({ key, label }) => `<button type="button" data-view="${key}">${label}</button>`).join('')}</div>
   <span class="toggles">
     <label><input type="checkbox" data-show="cone"> Shot Cone</label>
     <label><input type="checkbox" data-show="margin"> Puck-size margin</label>
@@ -238,7 +248,7 @@ function renderViewState() {
   $('#cornerMap').style.display = $('#mapCap').style.display = puckView ? '' : 'none';
   coverageLayer.lanesVisible = show.cone && !puckView;   // from behind the Puck, the lanes would fill the screen
   viewbar.querySelectorAll<HTMLInputElement>('[data-show]').forEach(i => i.checked = show[i.dataset.show as keyof typeof show]);
-  if (cov) renderMap();
+  if (cov) { renderMap(); scheduleSave(); }
 }
 
 // Orbiting by hand leaves the preset, so it becomes Free orbit and the camera stays where the coach put it.
@@ -354,13 +364,60 @@ addEventListener('keydown', e => {
 
 // ---------------- notices ----------------
 let flashTimer: number | undefined;
-function flash(msg: string) {
+function flash(msg: string, ms = 1600) {
   const el = $('#flash');
   el.textContent = msg;
   el.classList.add('show');
   clearTimeout(flashTimer);
-  flashTimer = window.setTimeout(() => el.classList.remove('show'), 1600);
+  flashTimer = window.setTimeout(() => el.classList.remove('show'), ms);
 }
+
+// ---------------- Setup link ----------------
+// The address bar always holds the Setup on screen: #v1.<...>, updated a moment after the coach stops editing.
+const currentSetup = (): Setup => ({ name: setupName, goalie, puck, view: currentView, show });
+let saveTimer: number | undefined;
+function saveNow() {
+  clearTimeout(saveTimer);
+  const h = '#' + encodeSetup(currentSetup());
+  if (location.hash !== h) history.replaceState(null, '', h);
+}
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(saveNow, 250);
+}
+
+const nameInput = $<HTMLInputElement>('#setupName');
+nameInput.maxLength = NAME_MAX;
+nameInput.value = setupName;
+nameInput.addEventListener('input', () => { setupName = nameInput.value.slice(0, NAME_MAX); scheduleSave(); });
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === 'Escape') nameInput.blur(); });
+
+$('#copyLink').addEventListener('click', async () => {
+  saveNow();
+  try { await navigator.clipboard.writeText(location.href); }
+  catch {   // no clipboard access (e.g. not https): fall back to the old way
+    const t = Object.assign(document.createElement('textarea'), { value: location.href });
+    document.body.append(t); t.select(); document.execCommand('copy'); t.remove();
+  }
+  flash('Link copied');
+});
+
+/** Shows a Setup: from a link pasted into this tab, for instance. */
+function applySetup(s: Setup) {
+  Object.assign(puck, s.puck);
+  puckMesh.group.position.set(puck.x, 0, puck.z);
+  Object.assign(goalie, s.goalie);
+  Object.assign(show, s.show);
+  setupName = nameInput.value = s.name;
+  select(null);
+  updatePose();
+  setView(s.view);
+}
+addEventListener('hashchange', () => {
+  const r = readHash();
+  applySetup(r.setup);
+  if (r.bad) flash("This link couldn't be read", 5000);
+});
 
 // ---------------- size + render loop ----------------
 function resize() {
@@ -391,4 +448,5 @@ renderer.setAnimationLoop(() => {
 updatePose();
 select(null);
 resize();
-setView('puck');
+setView(currentView);
+if (opened.bad) flash("This link couldn't be read", 5000);

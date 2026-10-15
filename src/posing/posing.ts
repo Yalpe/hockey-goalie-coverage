@@ -299,7 +299,9 @@ export function solvePose(setup: PoseSetup, clamps: Clamps = DEFAULT_CLAMPS): Po
     }
     const shoulder = shoulders[side], reach = (d.upperArm + d.forearm) * 0.995;
     let wrist = V(side * placed.out * H, placed.up * H, placed.fwd * H);
-    if (len(sub(wrist, shoulder)) > reach) { wrist = add(shoulder, mul(norm(sub(wrist, shoulder)), reach)); flags.push('out of arm reach'); }
+    // A hand settled at arm's reach and stored to a thousandth of height can land a hair past it, so allow 2 mm
+    // (still inside the full arm length) before calling it held back.
+    if (len(sub(wrist, shoulder)) > reach + 0.002) { wrist = add(shoulder, mul(norm(sub(wrist, shoulder)), reach)); flags.push('out of arm reach'); }
     const elbow = ikElbow(shoulder, wrist, d.upperArm, d.forearm, V(side * 0.8, -1, -0.4));
     const rot = { yaw: placed.yaw, pitch: placed.pitch, roll: placed.roll };
     return { side, requested: V(side * t.out * H, t.up * H, t.fwd * H), wrist, elbow, shoulder, flags, rot,

@@ -10,7 +10,8 @@ export const DEFAULT_PUCK: PuckSpot = { x: 0, z: 6 };
 /** The Puck stays on the ice: inside the boards (corners included), and no further out than just past the blue line. */
 export function clampPuck(x: number, z: number): PuckSpot {
   const cz = Math.min(RINK.blueZ + 2, Math.max(RINK.endZ + 0.1, z)), hw = rinkHalfW(cz) - 0.1;
-  return { x: Math.min(hw, Math.max(-hw, x)), z: cz };
+  const cm = (m: number) => Math.round(m * 100) / 100;   // the Setup link stores the Puck to the centimetre
+  return { x: cm(Math.min(hw, Math.max(-hw, x))), z: cm(cz) };
 }
 
 export interface PuckMesh {

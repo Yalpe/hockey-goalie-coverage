@@ -1,7 +1,7 @@
 import { CREASE_RADIUS, IN } from './dims';
 import {
   defaultHands, frontReach, placeAtPost, RVH_TURN_DEG, STANCES,
-  type CatchSide, type Pose, type PoseSetup, type StanceKey,
+  type HandTarget, type Pose, type PoseSetup, type StanceKey,
 } from './posing/posing';
 
 /**
@@ -21,28 +21,30 @@ export interface GoalieSetup extends PoseSetup {
   arcR: number;
   /** Where the goalie's root is on the ice. Kept up to date by placeGoalie; it is the setting when lock is free. */
   pos: { x: number; z: number };
+  /** Follow the Puck: square to it and on its angle. Read from links already; the feature comes in a later slice. */
+  follow: boolean;
 }
+
+// Settings move in the steps the Setup link stores them in (whole inches, whole degrees, centimetres, thousandths of
+// height), so a link always brings back exactly what was on screen.
 
 /** Height moves in whole inches between these (3′7″ to 6′7″). */
 export const HEIGHT_MIN_IN = 43, HEIGHT_MAX_IN = 79;
 /** Depth moves in whole inches between these. */
 export const DEPTH_MIN_IN = 24, DEPTH_MAX_IN = 157;
-/** The Top / Mid / Deep buttons. */
-export const DEPTH_SPOTS = { top: CREASE_RADIUS, mid: 1.35, deep: 0.95 } as const;
+/** The Top / Mid / Deep buttons, in whole inches: top of the crease (6 ft), about 1.35 m, about 0.95 m. */
+export const DEPTH_SPOTS = { top: CREASE_RADIUS, mid: 53 * IN, deep: 37 * IN } as const;
 export type DepthSpot = keyof typeof DEPTH_SPOTS;
-/** The stick is gripped this far above the top of the paddle. A constant, not a coach setting. */
-const GRIP_ABOVE_IN = 3;
-
-export function defaultGoalie(): GoalieSetup {
-  const stance: StanceKey = 'butterfly', catchSide: CatchSide = 'left';
-  return {
-    stance, catchSide, heightM: 69 * IN, gripAboveIn: GRIP_ABOVE_IN, ...defaultHands(stance, catchSide),
-    facingDeg: 0, lock: 'arc', arcR: CREASE_RADIUS, pos: { x: 0, z: 1.3 },
-  };
-}
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const DEG = 180 / Math.PI;
+const cm = (m: number) => Math.round(m * 100) / 100;
+
+/** A hand target in the link's steps: positions to a thousandth of height, wrist angles to the degree. */
+export function quantHand(t: HandTarget): HandTarget {
+  const k = (v: number) => Math.round(v * 1000) / 1000, d = (v: number) => Math.round(v) || 0;
+  return { out: k(t.out), up: k(t.up), fwd: k(t.fwd), yaw: d(t.yaw), pitch: d(t.pitch), roll: d(t.roll) };
+}
 
 /** A new Stance puts the hands back at its defaults. RVH locks to its own post; leaving RVH goes to the top of the crease. */
 export function setStance(g: GoalieSetup, stance: StanceKey) {
@@ -76,7 +78,7 @@ export function depthNow(g: GoalieSetup, pose: Pose): number {
 /** Setting the depth puts the goalie on the arc, keeping its angle. */
 export function setDepth(g: GoalieSetup, r: number) {
   g.lock = 'arc';
-  g.arcR = clamp(r, DEPTH_MIN_IN * IN, DEPTH_MAX_IN * IN);
+  g.arcR = clamp(Math.round(r / IN), DEPTH_MIN_IN, DEPTH_MAX_IN) * IN;
 }
 
 /** RVH only: back to its own post. */
@@ -110,7 +112,7 @@ export function moveGoalieTo(g: GoalieSetup, pose: Pose, p: { x: number; z: numb
     return note;
   }
   g.lock = 'free';
-  g.pos = { x: clamp(p.x, -4, 4), z: clamp(p.z, -0.3, 5) };
+  g.pos = { x: cm(clamp(p.x, -4, 4)), z: cm(clamp(p.z, -0.3, 5)) };
   return null;
 }
 
