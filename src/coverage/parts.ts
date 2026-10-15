@@ -45,3 +45,6 @@ export function goalieParts(pose: Pose): Part[] {
   box('blade', add(s.heel, add(mul(s.toeDir, d.blade.l / 2), mul(s.dir, d.blade.h / 2))), s.dir, cross(s.toeDir, s.dir), d.blade.l, d.blade.h, 0.015, 'blade');
   return parts;
 }
+
+/** A part's geometry to 0.01 mm, ignoring its material: equal signatures mean nothing needs rebuilding. */
+export const partSig = (p: Part) => JSON.stringify(p, (k, v) => k === 'mat' ? undefined : typeof v === 'number' ? Math.round(v * 1e5) : v);

@@ -1,14 +1,17 @@
 import './style.css';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { computeCoverage, HullCache, hullToWorld, type Hull } from './coverage/coverage';
 import { goalieParts } from './coverage/parts';
 import { PUCK_HALF_T } from './dims';
 import { defaultGoalie, placeGoalie, setHeightIn, setStance } from './goalie';
 import { solvePose } from './posing/posing';
+import { createCoverageLayer } from './scene/coverageLayer';
 import { createGoalieMesh } from './scene/goalieMesh';
 import { buildNet } from './scene/net';
 import { buildPuck, DEFAULT_PUCK, type PuckSpot } from './scene/puck';
 import { buildRink } from './scene/rink';
+import { coverageCard } from './ui/coverageCard';
 import { goalieCard } from './ui/goalieCard';
 import { VIEWS, viewPose, type ViewKey } from './views';
 
@@ -50,13 +53,33 @@ const card = goalieCard($('#goalieCard'), {
   heightIn: n => { setHeightIn(goalie, n); updateGoalie(); },
 });
 
+// ---------------- coverage ----------------
+const hullCache = new HullCache();
+let hulls: Hull[] = [];
+const coverageLayer = createCoverageLayer();
+scene.add(coverageLayer.group);
+const covCard = coverageCard($('#coverageCard'));
+const show = { margin: true };
+
 function updateGoalie() {
   const pose = solvePose(goalie);
-  goalieMesh.update(goalieParts(pose));
+  const parts = goalieParts(pose);
+  goalieMesh.update(parts);
+  hulls = hullCache.hulls(parts);
   const at = placeGoalie(goalie, pose);
   goalieRoot.position.set(at.x, 0, at.z);
   goalieRoot.rotation.y = at.facingDeg * Math.PI / 180;
   card.render(goalie);
+  updateCoverage();
+}
+
+/** Recomputes the Coverage Shadow and Open Net from the Puck through the goalie's cached hulls. */
+function updateCoverage() {
+  const root = { x: goalieRoot.position.x, z: goalieRoot.position.z, f: goalieRoot.rotation.y };
+  const cov = computeCoverage(hulls.map(h => hullToWorld(h, root)), { x: puck.x, y: PUCK_HALF_T, z: puck.z });
+  coverageLayer.update(cov, show.margin);
+  covCard.render(cov);
+  $('#noShot').style.display = cov.noShot ? 'block' : 'none';
 }
 updateGoalie();
 

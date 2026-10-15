@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MOUTH_H, NET_BASE_DEPTH, NET_BASE_HALF_W, PUCK_HALF_T } from './dims';
+import { CREASE_RADIUS, MOUTH_H, NET_BASE_DEPTH, NET_BASE_HALF_W, PUCK_HALF_T } from './dims';
 import { POST_H, POST_X } from './scene/net';
 import type { PuckSpot } from './scene/puck';
 
@@ -43,10 +43,10 @@ export function viewPose(k: ViewKey, puck: PuckSpot, aspect: number): ViewPose {
       // Far enough back, and aimed low enough, that the Puck stays in the bottom of the picture.
       return { pos: v(puck.x + ux * 3, 1.3, puck.z + uz * 3), target: v(puck.x * 0.3, 0.45, puck.z * 0.3), fov: 44 };
     case 'top': {
-      // Straight down, high enough to fit the whole net and the Puck with a margin. The net sits at the top of the
-      // picture and the Puck below it.
+      // Straight down, high enough to fit the whole net, the crease (where the goalie is) and the Puck with a margin.
+      // The net sits at the top of the picture and the Puck below it.
       const x0 = Math.min(-NET_BASE_HALF_W, puck.x) - 0.6, x1 = Math.max(NET_BASE_HALF_W, puck.x) + 0.6;
-      const z0 = Math.min(-NET_BASE_DEPTH, puck.z) - 0.6, z1 = Math.max(0, puck.z) + 0.6;
+      const z0 = Math.min(-NET_BASE_DEPTH, puck.z) - 0.6, z1 = Math.max(CREASE_RADIUS, puck.z) + 0.6;
       const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, t = Math.tan(20 / DEG);
       const h = Math.max(4.5, (z1 - z0) / 2 / t, (x1 - x0) / 2 / t / aspect) * 1.12;   // a little extra for the buttons
       return { pos: v(cx, h, cz + 0.001), target: v(cx, 0, cz), fov: 40 };

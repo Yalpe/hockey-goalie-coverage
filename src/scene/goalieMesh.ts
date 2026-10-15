@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Part, PartMat } from '../coverage/parts';
+import { partSig, type Part, type PartMat } from '../coverage/parts';
 import type { Vec } from '../posing/vec';
 
 /**
@@ -49,9 +49,7 @@ function partMesh(p: Part): THREE.Mesh {
   return mesh;
 }
 
-// A part's mesh is rebuilt only when the part itself changed (to 0.01 mm), so moving one hand leaves the rest alone.
-const sig = (p: Part) => JSON.stringify(p, (k, v) => k === 'mat' ? undefined : typeof v === 'number' ? Math.round(v * 1e5) : v);
-
+// A part's mesh is rebuilt only when the part itself changed, so moving one hand leaves the rest alone.
 export function createGoalieMesh(): GoalieMesh {
   const group = new THREE.Group();
   group.name = 'goalie';
@@ -62,7 +60,7 @@ export function createGoalieMesh(): GoalieMesh {
       const seen = new Set<string>();
       for (const p of parts) {
         seen.add(p.id);
-        const s = sig(p), old = built.get(p.id);
+        const s = partSig(p), old = built.get(p.id);
         if (old?.sig === s) continue;
         if (old) { group.remove(old.mesh); old.mesh.geometry.dispose(); }
         const mesh = partMesh(p);
