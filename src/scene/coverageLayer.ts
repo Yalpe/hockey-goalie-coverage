@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { SCORE_RECT, type Coverage, type Shape2 } from '../coverage/coverage';
+import { MOUTH_H, MOUTH_HALF_W } from '../dims';
 
 /**
  * What the coverage looks like on the goal plane: the Coverage Shadow (dark slate) and the Open Net (green), drawn
- * from the same polygons the % comes from, plus the dashed Puck-size margin (the 69" × 47" scoring rectangle).
- * Each layer sits a few millimetres in front of the goal line so they stack cleanly.
+ * from the same polygons the % comes from, plus the Puck-size margin: the strip outside the 69" × 47" scoring
+ * rectangle, shaded like the shadow. Each layer sits a few millimetres in front of the goal line so they stack cleanly.
  */
 export function createCoverageLayer() {
   const group = new THREE.Group();
@@ -18,16 +19,19 @@ export function createCoverageLayer() {
   open.position.z = 0.002; open.renderOrder = 2;
   group.add(shadow, open);
 
+  // The Puck-size margin: the strip between the scoring rectangle and the posts, crossbar and ice. It's too tight for
+  // the Puck, so no shot gets through it; shaded like the Coverage Shadow so the Goal Mouth is coloured to the posts.
   const R = SCORE_RECT;
-  const margin = new THREE.LineLoop(
-    new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(R.x0, R.y0, 0), new THREE.Vector3(R.x1, R.y0, 0),
-      new THREE.Vector3(R.x1, R.y1, 0), new THREE.Vector3(R.x0, R.y1, 0),
-    ]),
-    new THREE.LineDashedMaterial({ color: 0x334155, dashSize: 0.04, gapSize: 0.03, transparent: true, opacity: 0.9 }));
-  margin.computeLineDistances();
-  margin.position.z = 0.006; margin.renderOrder = 3;
-  group.add(margin);
+  const mouth = new THREE.Shape([
+    new THREE.Vector2(-MOUTH_HALF_W, 0), new THREE.Vector2(MOUTH_HALF_W, 0),
+    new THREE.Vector2(MOUTH_HALF_W, MOUTH_H), new THREE.Vector2(-MOUTH_HALF_W, MOUTH_H),
+  ]);
+  mouth.holes = [new THREE.Path([
+    new THREE.Vector2(R.x0, R.y0), new THREE.Vector2(R.x1, R.y0), new THREE.Vector2(R.x1, R.y1), new THREE.Vector2(R.x0, R.y1),
+  ])];
+  const tooTight = new THREE.Mesh(new THREE.ShapeGeometry(mouth), shadowMat);
+  tooTight.position.z = 0.002; tooTight.renderOrder = 2;
+  group.add(tooTight);
 
   const setShapes = (mesh: THREE.Mesh, shapes: Shape2[]) => {
     mesh.geometry.dispose();
@@ -44,7 +48,7 @@ export function createCoverageLayer() {
       setShapes(shadow, cov.shadow);
       setShapes(open, cov.open);
       shadow.visible = open.visible = !cov.noShot;
-      margin.visible = showMargin;
+      tooTight.visible = showMargin && !cov.noShot;
     },
   };
 }
