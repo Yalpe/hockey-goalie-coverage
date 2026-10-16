@@ -52,6 +52,9 @@ interface PlantedLeg { plant: { foot: [number, number]; pole: Triple } }
 type LegDef = FixedLeg | PlantedLeg;
 
 const STANDUP_LEG: FixedLeg = { thigh: [-0.05, -0.5, 0.87], shin: [0.3, -0.86, -0.4] };
+// Overlap post leg: tucked in under the hip and more upright than a Stand-up leg, so the pad stands square against
+// the post instead of flaring out to the side.
+const OVERLAP_POST_LEG: FixedLeg = { thigh: [-0.05, -0.5, 0.87], shin: [0.05, -0.9, -0.4] };
 const BUTTERFLY_LEG: FixedLeg = { thigh: [-0.12, -0.75, 0.6], shin: [1, 0, -0.45] };
 // RVH post leg: the goalie sits almost on top of the post knee. The pad lies flat on the ice, and the shin runs out
 // to the post along the goal line. Local directions are worked out for a body turned 30° toward the post:
@@ -74,7 +77,7 @@ interface StanceDef {
   /** Post Stances (RVH, Overlap): which post (+1 = the goalie's left), and how far the body turns toward it. */
   post?: Side;
   postTurn?: number;
-  /** RVH only: its two legs. */
+  /** The post-side leg, if it differs from leg (RVH, Overlap); RVH's far leg is planted instead. */
   postLeg?: FixedLeg;
   farLeg?: PlantedLeg;
 }
@@ -83,8 +86,8 @@ export const STANCES: Record<StanceKey, StanceDef> = {
   butterfly: { label: 'Butterfly',  lean: 12, leg: BUTTERFLY_LEG },
   rvhL:      { label: 'RVH left',   lean: 5, sideLean: 30, post: +1, postTurn: RVH_TURN_DEG, postLeg: RVH_POST_LEG, farLeg: RVH_FAR_LEG },
   rvhR:      { label: 'RVH right',  lean: 5, sideLean: 30, post: -1, postTurn: RVH_TURN_DEG, postLeg: RVH_POST_LEG, farLeg: RVH_FAR_LEG },
-  overlapL:  { label: 'Overlap left',  lean: 45, leg: STANDUP_LEG, post: +1, postTurn: OVERLAP_TURN_DEG },
-  overlapR:  { label: 'Overlap right', lean: 45, leg: STANDUP_LEG, post: -1, postTurn: OVERLAP_TURN_DEG },
+  overlapL:  { label: 'Overlap left',  lean: 45, leg: STANDUP_LEG, postLeg: OVERLAP_POST_LEG, post: +1, postTurn: OVERLAP_TURN_DEG },
+  overlapR:  { label: 'Overlap right', lean: 45, leg: STANDUP_LEG, postLeg: OVERLAP_POST_LEG, post: -1, postTurn: OVERLAP_TURN_DEG },
 };
 export const STANCE_KEYS = Object.keys(STANCES) as StanceKey[];
 /** Which way a post Stance faces when locked to its post (0 for the others). */
@@ -92,8 +95,9 @@ export const postFacing = (stance: StanceKey) => (STANCES[stance].post ?? 0) * (
 
 // RVH at its own post: where the goalie's root goes so the end of the post pad sits at the post, the pad standing
 // on edge just in front of the goal line and running along it from the post toward the middle of the net.
-// Overlap at its own post: the post-side pad stands just in front of the post, its outside edge (where the skate is)
-// a little outside the post, so the short side is sealed.
+// Overlap at its own post: the goalie stands with the post just behind its post-side pad, and the pad's outside
+// edge (where the skate is) a little outside the post, so the short side is sealed. Turned toward the corner, that
+// puts the post-side skate just behind the goal line.
 // Top of the crease: the goalie stands on the crease arc, toes on the edge of the blue paint. Upright skates count
 // at their toes; in a kneeling Stance, the front edge of whatever pad is on the ice counts instead.
 export function frontReach(pose: Pose): number {
@@ -116,10 +120,12 @@ export function placeAtPost(pose: Pose, stance: StanceKey, facingDeg: number) {
   const side = STANCES[stance].post!, f = facingDeg * RAD;
   const turn = (p: Vec) => ({ x: p.x * Math.cos(f) + p.z * Math.sin(f), z: -p.x * Math.sin(f) + p.z * Math.cos(f) });
   if (!pose.postAnchor) {
-    // Overlap: the post-side shin pad, turned with the body.
-    const cs = boxCorners(pose.legs.find(l => l.side === side)!.pads[0]).map(turn);
+    // Overlap, worked out in the goalie's own frame (so it holds at any turn): the post sits just behind the
+    // post-side shin pad, with the pad's outside edge past the far side of the post.
+    const cs = boxCorners(pose.legs.find(l => l.side === side)!.pads[0]);
     const out = Math.max(...cs.map(c => side * c.x)), back = Math.min(...cs.map(c => c.z));
-    return { x: side * (POST_X + POST_R + OVERLAP_OUT - out), z: POST_R + OVERLAP_CLEAR - back };
+    const p = turn(V(side * (out - POST_R - OVERLAP_OUT), 0, back - POST_R - OVERLAP_CLEAR));
+    return { x: side * POST_X - p.x, z: -p.z };
   }
   const w = turn(pose.postAnchor);
   return { x: side * POST_X - w.x, z: POST_PAD_AXIS_Z - w.z };
@@ -137,7 +143,7 @@ const RVH_POST_HAND = { out: 0.14, up: 0.22, fwd: 0.10 };   // low enough that t
 const RVH_FAR_GLOVE = { out: 0.12, up: 0.42, fwd: 0.16 }, RVH_FAR_BLOCKER = { out: 0.10, up: 0.34, fwd: 0.14 };
 export function defaultHands(stance: StanceKey, catchSide: CatchSide): Record<HandKey, HandTarget> {
   const st = STANCES[stance];
-  if (!st.postLeg) return structuredClone(DEFAULT_TARGETS[st.leg === BUTTERFLY_LEG ? 'butterfly' : 'standup']);
+  if (!st.farLeg) return structuredClone(DEFAULT_TARGETS[st.leg === BUTTERFLY_LEG ? 'butterfly' : 'standup']);
   const gloveAtPost = (catchSide === 'left' ? 1 : -1) === st.post;
   return {
     glove: { ...(gloveAtPost ? RVH_POST_HAND : RVH_FAR_GLOVE), ...NO_ROT, pitch: -20 },
@@ -184,7 +190,7 @@ const rz = (v: Vec, a: number) => V(v.x * Math.cos(a) - v.y * Math.sin(a), v.x *
 const wristRotate = (v: Vec, side: Side, r: WristRot) => ry(rx(rz(v, -side * r.roll * RAD), -r.pitch * RAD), side * r.yaw * RAD);
 
 function legDefFor(st: StanceDef, side: Side): LegDef {
-  return st.leg ?? (side === st.post ? st.postLeg! : st.farLeg!);
+  return side === st.post && st.postLeg ? st.postLeg : st.leg ?? st.farLeg!;
 }
 
 /** An oriented box: len along u, depth along n, width along u×n. */
@@ -308,7 +314,7 @@ export function solvePose(setup: PoseSetup, clamps: Clamps = DEFAULT_CLAMPS): Po
   const pelvis = lift;
   // RVH: the end of the post-leg pad's boot is what goes against the post. (Anchoring the ankle instead left the
   // boot, which reaches a skate's height past the ankle, sticking out past the post.)
-  const postLeg = st.postLeg ? legs.find(l => l.side === st.post)! : null;
+  const postLeg = st.farLeg ? legs.find(l => l.side === st.post)! : null;
   const boot = postLeg ? bootEnd(d, postLeg.knee, postLeg.ankle) : null;
   const postAnchor = boot ? V(boot.x, 0, boot.z) : null;
 

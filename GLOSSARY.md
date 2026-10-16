@@ -38,7 +38,7 @@ _Avoid_: Support position, pose
 Reverse-VH: a post-integration Stance. The post-side pad is down on the ice like a butterfly pad, running along the goal line and locked against the post, with the post between the pad and the skate toe. The goaltender sits over the post knee, leaning so the post-side shoulder seals the post; the post-side hand seals the gap beside the hip. The other leg spreads wide, with its skate planted out to the side on its inside edge and its pad facing the shooter. The body is turned about 30° toward the post.
 
 **Overlap**:
-A standing post-integration Stance, for a shooter driving wide with no pass option. The post-side pad stands just in front of the post with its outside edge (the skate) slightly outside the post, sealing the short side; a far-side shot goes wide or through the body. The body is turned about 60° toward the post, square to the sharp angle. With a pass option, RVH is the better choice: it drives off the post into the play more easily.
+A standing post-integration Stance, for a shooter driving wide with no pass option. The post-side leg is tucked in and upright, with the post just behind its pad and the pad's outside edge (the skate) slightly outside the post, sealing the short side; a far-side shot goes wide or through the body. The body is turned about 60° toward the post, square to the sharp angle. With a pass option, RVH is the better choice: it drives off the post into the play more easily.
 
 **Glove Hand**:
 The catching hand.
