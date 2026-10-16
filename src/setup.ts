@@ -14,7 +14,7 @@ export interface Setup {
   goalie: GoalieSetup;
   puck: PuckSpot;
   view: ViewKey;
-  show: { cone: boolean; margin: boolean };
+  show: { cone: boolean };
 }
 
 /** The longest Setup name. */
@@ -29,7 +29,7 @@ const VIEW_CODES: Record<ViewKey, string> = { puck: 'p', shooter: 's', top: 't',
 const RVH_POST: Partial<Record<StanceKey, 1 | -1>> = { rvhL: 1, rvhR: -1 };
 const V1 = {
   stance: 'butterfly' as StanceKey, heightIn: 69, catchSide: 'left' as CatchSide,
-  depthIn: 72, facingDeg: 0, puckCm: { x: 0, z: 600 }, view: 'puck' as ViewKey, cone: true, margin: true,
+  depthIn: 72, facingDeg: 0, puckCm: { x: 0, z: 600 }, view: 'puck' as ViewKey, cone: true,
   gripAboveIn: 3, rvhTurnDeg: 30, overlapTurnDeg: 60,
 };
 /** Which way each post Stance faces at its post, by default. */
@@ -87,7 +87,6 @@ export function encodeSetup(s: Setup): string {
   put('pz', Math.round(s.puck.z * 100), V1.puckCm.z);
   put('v', VIEW_CODES[s.view], VIEW_CODES[V1.view]);
   put('tc', s.show.cone ? 1 : 0, 1);
-  put('tm', s.show.margin ? 1 : 0, 1);
   return 'v1.' + compressToEncodedURIComponent(JSON.stringify(o));
 }
 
@@ -160,6 +159,6 @@ function decodeV1(o: Record<string, unknown>): Setup {
     },
     puck: { x: int('px', V1.puckCm.x, -2000, 2000) / 100, z: int('pz', V1.puckCm.z, -500, 3000) / 100 },
     view: code('v', VIEW_CODES, V1.view),
-    show: { cone: int('tc', 1, 0, 1) === 1, margin: int('tm', 1, 0, 1) === 1 },
+    show: { cone: int('tc', 1, 0, 1) === 1 },   // older links may hold 'tm', the retired Puck-size margin toggle
   };
 }

@@ -194,7 +194,7 @@ function updateCoverage() {
   cov = computeCoverage(hulls.map(h => hullToWorld(h, root)), P);
   const pelvis = goalieRoot.localToWorld(new THREE.Vector3(pose.pelvis.x, pose.pelvis.y, pose.pelvis.z));
   const named = cov.noShot ? [] : nameHoles(cov, P, pelvis, goalie.catchSide);
-  coverageLayer.update(cov, P, show.margin);
+  coverageLayer.update(cov, P);
   covCard.render(cov, named);
   labels.set(named);
   $('#noShot').style.display = cov.noShot ? 'block' : 'none';
@@ -273,7 +273,6 @@ const viewbar = $('#viewbar');
 viewbar.innerHTML = `<div class="views">${VIEWS.map(({ key, label }) => `<button type="button" data-view="${key}">${label}</button>`).join('')}</div>
   <span class="toggles">
     <label><input type="checkbox" data-show="cone"> Shot Cone</label>
-    <label><input type="checkbox" data-show="margin"> Puck-size margin</label>
   </span>`;
 viewbar.addEventListener('click', e => {
   const k = (e.target as HTMLElement).closest<HTMLElement>('[data-view]')?.dataset.view as ViewKey | undefined;

@@ -68,11 +68,10 @@ export function createCoverageLayer() {
 
   return {
     group,
-    update(cov: Coverage, P: Vec, showMargin: boolean) {
+    update(cov: Coverage, P: Vec) {
       setShapes(shadow, cov.shadow);
       setShapes(open, cov.open);
-      shadow.visible = open.visible = !cov.noShot;
-      tooTight.visible = showMargin && !cov.noShot;
+      shadow.visible = open.visible = tooTight.visible = !cov.noShot;
       buildLanes(cov, P);
     },
     /** Lanes are switched by the Shot Cone toggle, and hidden in Puck's view, where they would fill the screen. */

@@ -44,7 +44,7 @@ Decided with the coach (grilling session, 2026-10-15).
 | Each hand | only the fields that differ from that hand's default for the Setup's Stance and Catch Side: `out/up/fwd` as integer thousandths of height, `yaw/pitch/roll` as whole degrees; a hand at its default is left out entirely |
 | Puck | x, z (integer cm) |
 | View | preset name; Free orbit opens on its starting overview (no camera angles) |
-| Display toggles | Shot Cone lanes, Puck-size margin |
+| Display toggles | Shot Cone lanes (the Puck-size margin toggle was removed 2026-10-16; old links' `tm` key is ignored) |
 
 Key names and code values are the builder's choice, kept short.
 

@@ -65,7 +65,7 @@ The prototypes are throwaway. Don't build on top of them; port from them.
 ### 3. Coverage
 
 - Port the COVERAGE MODULE with its per-part hull cache.
-- On the goal plane: a dark Coverage Shadow (slate, ~80% opaque) and a green Open Net (~70%). Shade the Puck-size margin (the strip outside the 69" × 47" scoring rectangle) like the shadow, on by default (amended: see the coverage ticket).
+- On the goal plane: a dark Coverage Shadow (slate, ~80% opaque) and a green Open Net (~70%). Shade the Puck-size margin (the strip outside the 69" × 47" scoring rectangle) like the shadow, always shown (amended: see the coverage ticket; its toggle was removed 2026-10-16).
 - The "% covered" card top-right: a big %, a covered/open bar, and "Open Net x% · n sq in".
 - With the Puck on or behind the goal line, the scene and card say there is no shot.
 
@@ -91,7 +91,7 @@ The prototypes are throwaway. Don't build on top of them; port from them.
 
 ### 6. Scoring lanes and named holes
 
-- A translucent green lane (~18%, outlined) from the Puck into each hole of the Open Net. The "Shot Cone" toggle switches them on and off. The Puck-size margin toggle sits next to it.
+- A translucent green lane (~18%, outlined) from the Puck into each hole of the Open Net. The "Shot Cone" toggle switches them on and off.
 - Every hole larger than 0.2% of the net is labelled at its centre in coach words, relative to the goalie as seen from the Puck, e.g. "Glove side high 6%", "Blocker side low 3%", "Five-hole 4%". At most six labels, biggest first. The same list appears in the "% covered" card. The thresholds are in the [Coverage rendering prototype](../issues/goalie-coverage-mvp/05-coverage-prototype.md) resolution.
 
 **Done when:** hole names match what the coach sees from both sides, at both Catch Sides, and in RVH.
