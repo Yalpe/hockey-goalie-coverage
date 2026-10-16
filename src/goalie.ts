@@ -1,6 +1,7 @@
-import { CREASE_RADIUS, IN } from './dims';
+import { goalieParts } from './coverage/parts';
+import { CREASE_RADIUS, IN, MOUTH_HALF_W, POST_R } from './dims';
 import {
-  defaultHands, frontReach, placeAtPost, postFacing, STANCES,
+  boxCorners, defaultHands, frontReach, placeAtPost, postFacing, STANCES,
   type HandTarget, type Pose, type PoseSetup, type StanceKey,
 } from './posing/posing';
 
@@ -59,12 +60,61 @@ export function setHeightIn(g: GoalieSetup, inches: number) {
   g.heightM = clamp(Math.round(inches), HEIGHT_MIN_IN, HEIGHT_MAX_IN) * IN;
 }
 
+// The body parts that must stay out of the post. Arms, hands and stick are left out: the coach places those.
+const POST_CLEAR_PARTS = /^(pelvis|chest|head|\w+Shoulder|thigh|shin|pad)/;
+const POST = { x: MOUTH_HALF_W + POST_R, r: POST_R + 0.005 };   // post centre and how close a part may come
+
+/**
+ * Where a post Stance stands at its post. Overlap is placed by its pad (placeAtPost), then slid straight forward,
+ * which keeps the pad's edge past the post, until no part of the body goes through the post.
+ */
+function postSpot(pose: Pose, stance: StanceKey, facingDeg: number) {
+  const p = placeAtPost(pose, stance, facingDeg);
+  if (pose.postAnchor) return p;   // RVH
+  // Each part seen from above, in the goalie's own frame: a convex outline, and how far round it the post must stay.
+  const shapes = goalieParts(pose).filter(q => POST_CLEAR_PARTS.test(q.id)).map(q =>
+    q.kind === 'capsule' ? { pts: [q.a, q.b], r: q.r }
+    : q.kind === 'box' ? { pts: boxCorners({ center: q.center, u: q.u, n: q.n, len: q.l, width: q.w, depth: q.d }), r: 0 }
+    : { pts: [q.center], r: Math.max(q.rx, q.ry) }).map(s => ({ hull: hull2(s.pts.map(v => [v.x, v.z] as P2)), r: s.r }));
+  const f = facingDeg / DEG, c = Math.cos(f), s = Math.sin(f);
+  const wx = STANCES[stance].post! * POST.x - p.x, wz = -p.z;
+  const px = wx * c - wz * s, pz = wx * s + wz * c;   // the post, in the goalie's frame
+  let t = 0;
+  while (t < 1 && shapes.some(h => distToHull([px, pz - t], h.hull) < h.r + POST.r)) t += 0.002;
+  return { x: p.x + t * s, z: p.z + t * c };
+}
+
+type P2 = [number, number];
+/** The convex hull of points in the plane (monotone chain), anticlockwise. */
+function hull2(pts: P2[]): P2[] {
+  const ps = [...pts].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (ps.length < 3) return ps;
+  const turn = (o: P2, a: P2, b: P2) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = (list: P2[]) => {
+    const h: P2[] = [];
+    for (const q of list) { while (h.length >= 2 && turn(h[h.length - 2], h[h.length - 1], q) <= 0) h.pop(); h.push(q); }
+    return h.slice(0, -1);
+  };
+  return [...half(ps), ...half(ps.reverse())];
+}
+/** Distance from q to a convex outline (a point or segment if it has 1 or 2 corners); 0 inside. */
+function distToHull(q: P2, h: P2[]): number {
+  let best = Infinity, inside = h.length >= 3;
+  for (let i = 0; i < h.length; i++) {
+    const a = h[i], b = h[(i + 1) % h.length], ex = b[0] - a[0], ez = b[1] - a[1], l2 = ex * ex + ez * ez;
+    const k = l2 ? clamp(((q[0] - a[0]) * ex + (q[1] - a[1]) * ez) / l2, 0, 1) : 0;
+    best = Math.min(best, Math.hypot(q[0] - a[0] - k * ex, q[1] - a[1] - k * ez));
+    if (ex * (q[1] - a[1]) - ez * (q[0] - a[0]) < 0) inside = false;
+  }
+  return inside ? 0 : best;
+}
+
 /** Where the goalie stands on the ice, by its lock. Updates g.pos. */
 export function placeGoalie(g: GoalieSetup, pose: Pose): { x: number; z: number; facingDeg: number } {
   if (g.lock === 'post' && !STANCES[g.stance].post) g.lock = 'arc';
   const f = g.facingDeg / DEG;
   let p = g.pos;
-  if (g.lock === 'post') p = placeAtPost(pose, g.stance, g.facingDeg);
+  if (g.lock === 'post') p = postSpot(pose, g.stance, g.facingDeg);
   else if (g.lock === 'arc') { const d = g.arcR - frontReach(pose); p = { x: d * Math.sin(f), z: d * Math.cos(f) }; }
   g.pos = { x: p.x, z: p.z };
   return { ...g.pos, facingDeg: g.facingDeg };
@@ -111,7 +161,7 @@ export function setFacing(g: GoalieSetup, deg: number) {
 export function moveGoalieTo(g: GoalieSetup, pose: Pose, p: { x: number; z: number }): string | null {
   const post = STANCES[g.stance].post;
   if (post) {
-    const f = postFacing(g.stance), q = placeAtPost(pose, g.stance, f);
+    const f = postFacing(g.stance), q = postSpot(pose, g.stance, f);
     if (Math.hypot(p.x - q.x, p.z - q.z) < 0.35) {
       const note = g.lock !== 'post' ? 'Locked to the post' : null;
       g.lock = 'post'; g.facingDeg = f;
