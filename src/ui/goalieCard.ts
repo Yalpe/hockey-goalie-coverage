@@ -20,7 +20,7 @@ export interface GoalieCardActions {
 export function goalieCard(el: HTMLElement, act: GoalieCardActions) {
   el.innerHTML = `
     <b class="title">Goalie</b>
-    <div class="hint">Drag the body to move it: it snaps to the top of the crease, and in RVH to its post.
+    <div class="hint">Drag the body to move it: it snaps to the top of the crease, and in RVH or Overlap to its post.
       Drag the dark knob on the ring round its feet to turn it.</div>
     <div class="row"><label>Stance</label><span class="btns">
       ${STANCE_KEYS.map(k => `<button type="button" data-stance="${k}">${STANCES[k].label}</button>`).join('')}
@@ -90,7 +90,7 @@ export function goalieCard(el: HTMLElement, act: GoalieCardActions) {
       const postBtn = el.querySelector<HTMLButtonElement>('[data-post]')!;
       postBtn.classList.toggle('on', g.lock === 'post');
       postBtn.disabled = !post;
-      postBtn.title = post ? 'Back to its post' : 'RVH only';
+      postBtn.title = post ? 'Back to its post' : 'RVH and Overlap only';
       if (document.activeElement !== height) height.value = String(heightNow());
       el.querySelector('[data-height-val]')!.textContent = heightText(g.heightM);
       depth.disabled = g.lock === 'post';

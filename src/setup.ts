@@ -21,13 +21,20 @@ export interface Setup {
 export const NAME_MAX = 60;
 
 // ---------------- frozen v1 ----------------
-const STANCE_CODES: Record<StanceKey, string> = { standup: 'su', butterfly: 'bf', rvhL: 'rl', rvhR: 'rr' };
+// Codes and defaults may be added for something new (Overlap came after v1 shipped), as no older link holds them.
+const STANCE_CODES: Record<StanceKey, string> = {
+  standup: 'su', butterfly: 'bf', rvhL: 'rl', rvhR: 'rr', overlapL: 'ol', overlapR: 'or',
+};
 const VIEW_CODES: Record<ViewKey, string> = { puck: 'p', shooter: 's', top: 't', behind: 'b', orbit: 'o' };
 const RVH_POST: Partial<Record<StanceKey, 1 | -1>> = { rvhL: 1, rvhR: -1 };
 const V1 = {
   stance: 'butterfly' as StanceKey, heightIn: 69, catchSide: 'left' as CatchSide,
   depthIn: 72, facingDeg: 0, puckCm: { x: 0, z: 600 }, view: 'puck' as ViewKey, cone: true, margin: true,
-  gripAboveIn: 3, rvhTurnDeg: 30,
+  gripAboveIn: 3, rvhTurnDeg: 30, overlapTurnDeg: 60,
+};
+/** Which way each post Stance faces at its post, by default. */
+const POST_FACING: Partial<Record<StanceKey, number>> = {
+  rvhL: V1.rvhTurnDeg, rvhR: -V1.rvhTurnDeg, overlapL: V1.overlapTurnDeg, overlapR: -V1.overlapTurnDeg,
 };
 type HandFrac = Record<HandKey, HandTarget>;
 const NO_ROT = { yaw: 0, pitch: 0, roll: 0 };
@@ -39,7 +46,7 @@ const V1_RVH_POST_HAND = { out: 0.14, up: 0.22, fwd: 0.10 };
 const V1_RVH_FAR_GLOVE = { out: 0.12, up: 0.42, fwd: 0.16 }, V1_RVH_FAR_BLOCKER = { out: 0.10, up: 0.34, fwd: 0.14 };
 function v1Hands(stance: StanceKey, catchSide: CatchSide): HandFrac {
   const post = RVH_POST[stance];
-  if (!post) return structuredClone(V1_HANDS[stance as 'standup' | 'butterfly']);
+  if (!post) return structuredClone(V1_HANDS[stance === 'butterfly' ? 'butterfly' : 'standup']);
   const gloveAtPost = (catchSide === 'left' ? 1 : -1) === post;
   return {
     glove: { ...(gloveAtPost ? V1_RVH_POST_HAND : V1_RVH_FAR_GLOVE), ...NO_ROT, pitch: -20 },
@@ -60,7 +67,7 @@ export function encodeSetup(s: Setup): string {
   put('s', STANCE_CODES[g.stance], STANCE_CODES[V1.stance]);
   put('h', Math.round(g.heightM / IN), V1.heightIn);
   put('c', g.catchSide === 'left' ? 'l' : 'r', 'l');
-  if (g.lock === 'post') o.pl = 'p';
+  if (g.lock === 'post') { o.pl = 'p'; put('f', Math.round(g.facingDeg), POST_FACING[g.stance]); }
   else {
     if (g.lock === 'free') { o.pl = 'f'; o.x = Math.round(g.pos.x * 100); o.z = Math.round(g.pos.z * 100); }
     else put('d', Math.round(g.arcR / IN), V1.depthIn);
@@ -125,10 +132,10 @@ function decodeV1(o: Record<string, unknown>): Setup {
   const catchSide: CatchSide = code('c', { left: 'l', right: 'r' }, V1.catchSide);
   const heightM = int('h', V1.heightIn, 43, 79) * IN;
 
-  const pl = o.pl === undefined ? 'a' : o.pl, post = RVH_POST[stance];
+  const pl = o.pl === undefined ? 'a' : o.pl, postFacing = POST_FACING[stance];
   if (pl !== 'a' && pl !== 'p' && pl !== 'f') throw new BadLink('bad pl');
-  const lock = pl === 'p' && post ? 'post' : pl === 'f' ? 'free' : 'arc';
-  const facingDeg = lock === 'post' ? post! * V1.rvhTurnDeg : int('f', V1.facingDeg, -90, 90);
+  const lock = pl === 'p' && postFacing !== undefined ? 'post' : pl === 'f' ? 'free' : 'arc';
+  const facingDeg = int('f', lock === 'post' ? postFacing! : V1.facingDeg, -90, 90);
   const arcR = int('d', V1.depthIn, 24, 157) * IN;
   const pos = lock === 'free' ? { x: int('x', 0, -400, 400) / 100, z: int('z', 0, -30, 500) / 100 } : { x: 0, z: 0 };
 

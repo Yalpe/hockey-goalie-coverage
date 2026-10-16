@@ -57,8 +57,8 @@ The prototypes are throwaway. Don't build on top of them; port from them.
 
 - Port the POSING MODULE and build the primitive goalie mesh on named joints, so the mesh can be swapped later.
 - The goalie stands at the top of the crease, facing straight out. Hands sit at their per-Stance defaults (glove tilted down 20°).
-- A goalie card (bottom-left; for now it's always shown) with Stance (Stand-up, Butterfly, RVH left/right), Catch Side, and Height in 1-inch steps reading e.g. 5′9″ (1.75 m). Gear is sized from height.
-- RVH goes to its own post (`placeAtPost`).
+- A goalie card (bottom-left; for now it's always shown) with Stance (Stand-up, Butterfly, RVH left/right, Overlap left/right), Catch Side, and Height in 1-inch steps reading e.g. 5′9″ (1.75 m). Gear is sized from height.
+- RVH and Overlap go to their own post (`placeAtPost`).
 
 **Done when:** every Stance and both Catch Sides look the way they did in the posing prototype at several heights. RVH seals its post, and the stick blade lies on the ice.
 

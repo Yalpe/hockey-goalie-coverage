@@ -1,13 +1,13 @@
 import { CREASE_RADIUS, IN } from './dims';
 import {
-  defaultHands, frontReach, placeAtPost, RVH_TURN_DEG, STANCES,
+  defaultHands, frontReach, placeAtPost, postFacing, STANCES,
   type HandTarget, type Pose, type PoseSetup, type StanceKey,
 } from './posing/posing';
 
 /**
  * How the goalie is placed:
  *  - arc: toes on a circle of radius arcR round the middle of the goal line (its depth); turning slides it round;
- *  - post: RVH locked to its own post;
+ *  - post: a post Stance (RVH, Overlap) locked to its own post;
  *  - free: wherever the coach put it.
  */
 export type Lock = 'arc' | 'post' | 'free';
@@ -46,12 +46,12 @@ export function quantHand(t: HandTarget): HandTarget {
   return { out: k(t.out), up: k(t.up), fwd: k(t.fwd), yaw: d(t.yaw), pitch: d(t.pitch), roll: d(t.roll) };
 }
 
-/** A new Stance puts the hands back at its defaults. RVH locks to its own post; leaving RVH goes to the top of the crease. */
+/** A new Stance puts the hands back at its defaults. A post Stance (RVH, Overlap) locks to its own post; leaving one goes to the top of the crease. */
 export function setStance(g: GoalieSetup, stance: StanceKey) {
   const post = STANCES[stance].post;
   g.stance = stance;
   Object.assign(g, defaultHands(stance, g.catchSide));
-  if (post) { g.lock = 'post'; g.facingDeg = post * RVH_TURN_DEG; }
+  if (post) { g.lock = 'post'; g.facingDeg = postFacing(g.stance); }
   else if (g.lock === 'post') { g.lock = 'arc'; g.arcR = CREASE_RADIUS; g.facingDeg = 0; }
 }
 
@@ -72,7 +72,7 @@ export function placeGoalie(g: GoalieSetup, pose: Pose): { x: number; z: number;
 
 /**
  * Follow the Puck: square to the Puck and on its angle. On the arc that's just facing it (the arc does the rest);
- * placed freely, the goalie keeps its distance and slides round onto the Puck's angle. RVH at the post stays put.
+ * placed freely, the goalie keeps its distance and slides round onto the Puck's angle. A post Stance at the post stays put.
  */
 export function applyFollow(g: GoalieSetup, puck: { x: number; z: number }) {
   if (!g.follow || g.lock === 'post') return;
@@ -94,10 +94,10 @@ export function setDepth(g: GoalieSetup, r: number) {
   g.arcR = clamp(Math.round(r / IN), DEPTH_MIN_IN, DEPTH_MAX_IN) * IN;
 }
 
-/** RVH only: back to its own post. */
+/** Post Stances (RVH, Overlap) only: back to its own post. */
 export function lockToPost(g: GoalieSetup) {
   const post = STANCES[g.stance].post;
-  if (post) { g.lock = 'post'; g.facingDeg = post * RVH_TURN_DEG; }
+  if (post) { g.lock = 'post'; g.facingDeg = postFacing(g.stance); }
 }
 
 export function setFacing(g: GoalieSetup, deg: number) {
@@ -105,13 +105,13 @@ export function setFacing(g: GoalieSetup, deg: number) {
 }
 
 /**
- * Moving the goalie by hand to root position p: in RVH it snaps to its own post, and anywhere it snaps to the top
+ * Moving the goalie by hand to root position p: in a post Stance it snaps to its own post, and anywhere it snaps to the top
  * of the crease; elsewhere it stays where it's put. Returns a note for the coach when it snaps.
  */
 export function moveGoalieTo(g: GoalieSetup, pose: Pose, p: { x: number; z: number }): string | null {
   const post = STANCES[g.stance].post;
   if (post) {
-    const f = post * RVH_TURN_DEG, q = placeAtPost(pose, g.stance, f);
+    const f = postFacing(g.stance), q = placeAtPost(pose, g.stance, f);
     if (Math.hypot(p.x - q.x, p.z - q.z) < 0.35) {
       const note = g.lock !== 'post' ? 'Locked to the post' : null;
       g.lock = 'post'; g.facingDeg = f;
