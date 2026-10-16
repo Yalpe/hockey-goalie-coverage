@@ -25,18 +25,11 @@ const SPHERE_DIRS = Array.from({ length: SPHERE_N }, (_, i) => {
 });
 
 function partPoints(p: Part): Vec[] {
+  if (p.kind === 'hull') return p.pts;
   if (p.kind === 'capsule') return [p.a, p.b].flatMap(e => SPHERE_DIRS.map(s => add(e, mul(s, p.r))));
-  if (p.kind === 'box') {
-    const w = cross(p.u, p.n), out: Vec[] = [];
-    for (const a of [-1, 1]) for (const c of [-1, 1]) for (const e of [-1, 1])
-      out.push(add(p.center, add(mul(p.u, a * p.l / 2), add(mul(p.n, c * p.d / 2), mul(w, e * p.w / 2)))));
-    return out;
-  }
-  const N = 24, k = 1 / Math.cos(Math.PI / N), nrm = cross(p.ay, p.ax), out: Vec[] = [];   // disk
-  for (let i = 0; i < N; i++) {
-    const a = 2 * Math.PI * i / N, rim = add(p.center, add(mul(p.ax, k * p.rx * Math.cos(a)), mul(p.ay, k * p.ry * Math.sin(a))));
-    for (const s of [-1, 1]) out.push(add(rim, mul(nrm, s * p.t / 2)));
-  }
+  const w = cross(p.u, p.n), out: Vec[] = [];   // box
+  for (const a of [-1, 1]) for (const c of [-1, 1]) for (const e of [-1, 1])
+    out.push(add(p.center, add(mul(p.u, a * p.l / 2), add(mul(p.n, c * p.d / 2), mul(w, e * p.w / 2)))));
   return out;
 }
 

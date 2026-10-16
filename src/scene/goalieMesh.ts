@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { partSig, type Part, type PartMat } from '../coverage/parts';
 import type { Vec } from '../posing/vec';
 
@@ -19,6 +20,7 @@ const MATS: Record<PartMat, THREE.Material> = {
   pad: new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.7 }),
   glove: new THREE.MeshStandardMaterial({ color: 0xe8b04a, roughness: 0.7 }),
   blocker: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 }),
+  trim: new THREE.MeshStandardMaterial({ color: 0x8c99a6, roughness: 0.8 }),
   stick: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.7 }),
   blade: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 }),
 };
@@ -40,10 +42,7 @@ function partMesh(p: Part): THREE.Mesh {
     mesh.quaternion.copy(basisQ(crossV(p.u, p.n), p.u, p.n));
     mesh.position.copy(tv(p.center));
   } else {
-    mesh = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 32), MATS[p.mat]);
-    mesh.quaternion.copy(basisQ(p.ax, crossV(p.ay, p.ax), p.ay));
-    mesh.scale.set(p.rx, p.t, p.ry);
-    mesh.position.copy(tv(p.center));
+    mesh = new THREE.Mesh(new ConvexGeometry(p.pts.map(tv)), MATS[p.mat]);
   }
   mesh.name = p.id;
   return mesh;

@@ -75,7 +75,7 @@ function postSpot(pose: Pose, stance: StanceKey, facingDeg: number) {
   const shapes = goalieParts(pose).filter(q => POST_CLEAR_PARTS.test(q.id)).map(q =>
     q.kind === 'capsule' ? { pts: [q.a, q.b], r: q.r }
     : q.kind === 'box' ? { pts: boxCorners({ center: q.center, u: q.u, n: q.n, len: q.l, width: q.w, depth: q.d }), r: 0 }
-    : { pts: [q.center], r: Math.max(q.rx, q.ry) }).map(s => ({ hull: hull2(s.pts.map(v => [v.x, v.z] as P2)), r: s.r }));
+    : { pts: q.pts, r: 0 }).map(s => ({ hull: hull2(s.pts.map(v => [v.x, v.z] as P2)), r: s.r }));
   const f = facingDeg / DEG, c = Math.cos(f), s = Math.sin(f);
   const wx = STANCES[stance].post! * POST.x - p.x, wz = -p.z;
   const px = wx * c - wz * s, pz = wx * s + wz * c;   // the post, in the goalie's frame
