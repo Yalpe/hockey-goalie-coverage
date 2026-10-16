@@ -65,8 +65,8 @@ const POST_CLEAR_PARTS = /^(pelvis|chest|head|\w+Shoulder|thigh|shin|pad)/;
 const POST = { x: MOUTH_HALF_W + POST_R, r: POST_R + 0.005 };   // post centre and how close a part may come
 
 /**
- * Where a post Stance stands at its post. Overlap is placed by its pad (placeAtPost), then slid straight forward,
- * which keeps the pad's edge past the post, until no part of the body goes through the post.
+ * Where a post Stance stands at its post. Overlap is lined up with the post just inside its post-side skate
+ * (placeAtPost), then moved straight along its facing until its back just touches the post.
  */
 function postSpot(pose: Pose, stance: StanceKey, facingDeg: number) {
   const p = placeAtPost(pose, stance, facingDeg);
@@ -79,8 +79,10 @@ function postSpot(pose: Pose, stance: StanceKey, facingDeg: number) {
   const f = facingDeg / DEG, c = Math.cos(f), s = Math.sin(f);
   const wx = STANCES[stance].post! * POST.x - p.x, wz = -p.z;
   const px = wx * c - wz * s, pz = wx * s + wz * c;   // the post, in the goalie's frame
-  let t = 0;
-  while (t < 1 && shapes.some(h => distToHull([px, pz - t], h.hull) < h.r + POST.r)) t += 0.002;
+  // t: how far forward the goalie moves. Start with the post well behind the body and bring it in until it touches.
+  const hits = (t: number) => shapes.some(h => distToHull([px, pz - t], h.hull) < h.r + POST.r);
+  let t = 0.8;
+  while (t > -0.8 && !hits(t - 0.002)) t -= 0.002;
   return { x: p.x + t * s, z: p.z + t * c };
 }
 
