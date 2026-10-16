@@ -81,17 +81,25 @@ html, body {
 .card input[type=range] { flex: 1; min-width: 80px; accent-color: var(--accent); }
 .card .val { min-width: 100px; text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
 
-#card { left: 12px; bottom: 12px; width: 430px; max-width: calc(100% - 24px); }
+/* The dock along the bottom: the selection card on the left, the corner map on the right */
+#dock {
+  position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 6; pointer-events: none;
+  display: flex; justify-content: space-between; align-items: flex-end; gap: 12px;
+}
+#dock > * { pointer-events: auto; }
+#card { position: relative; flex: 0 1 430px; min-width: 0; }
+#cardToggle { display: none; }
 #card .hint { color: var(--muted); font-size: 13px; margin: 2px 0 6px; }
 #card button:disabled { opacity: .4; cursor: default; border-color: var(--line); }
 
 /* Corner map (Puck's view only), bottom-right */
+#mapBox { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
 #cornerMap {
-  position: absolute; right: 12px; bottom: 12px; z-index: 6; width: 300px; height: 290px; touch-action: none;
+  display: block; width: 300px; height: 290px; touch-action: none;
   background: #f4f8fb; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 6px 20px rgba(0, 0, 0, .15);
 }
 #mapCap {
-  position: absolute; right: 20px; bottom: 308px; z-index: 6; font-size: 12px; font-weight: 600; color: var(--muted);
+  margin-right: 8px; font-size: 12px; font-weight: 600; color: var(--muted);
   background: rgba(255, 255, 255, .85); padding: 1px 6px; border-radius: 4px;
 }
 
@@ -181,3 +189,83 @@ kbd {
 #card label.check input { accent-color: var(--accent); margin: 0; }
 #card .btns.wrap { margin-top: 4px; }
 #card .row > label:first-child small { display: block; font-size: 11px; line-height: 1.1; color: #94a3b8; }
+
+/* Hints that only make sense with a mouse (wheel, keys), or only with a finger */
+.touch { display: none; }
+@media (hover: none) {
+  .mouse { display: none; }
+  .touch { display: inline; }
+}
+
+/* Fingers: bigger targets, and no double-tap zoom on the controls */
+@media (pointer: coarse) {
+  button, label, input { touch-action: manipulation; }
+  #viewbar button, #shareBtn { padding: 7px 12px; }
+  .card button { min-height: 36px; padding: 6px 11px; }
+  .card button.step { min-width: 36px; padding: 6px 10px; }
+  .card input[type=range] { height: 32px; }
+  #viewbar .toggles { padding: 7px 10px; }
+  #viewbar .toggles input, #card label.check input { width: 18px; height: 18px; }
+}
+
+/* Small or short screens: a compact "% covered" card, and a selection card that scrolls and folds away */
+@media (max-width: 700px), (max-height: 500px) {
+  #coverageCard { min-width: 0; padding: 8px 12px; }
+  #coverageCard .big { font-size: 30px; }
+  #coverageCard .big small { font-size: 13px; }
+  #coverageCard .bar { height: 8px; margin: 6px 0 4px; }
+  #coverageCard .sub, #coverageCard ol { font-size: 12px; }
+  #coverageCard ol { margin-top: 4px; }
+
+  #card { overflow-y: auto; overscroll-behavior: contain; }
+  #cardToggle {
+    display: block; position: sticky; top: 0; float: right; margin: -4px -6px 0 8px; z-index: 1;
+    width: 36px; height: 30px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: #fff;
+  }
+  #cardToggle::before { content: '▾'; font-size: 16px; }
+  #card.folded #cardToggle::before { content: '▴'; }
+  #card.folded { max-height: none; overflow: hidden; }
+  #card.folded [data-panel] > :not(.title) { display: none; }
+  #card.folded .title { margin: 0; }
+}
+@media (max-height: 500px) and (min-width: 701px) {
+  #card { max-height: calc(100vh - 150px); }
+  #cornerMap { width: 220px; height: 200px; }
+}
+
+/* Phones held upright: the view buttons scroll along the top, Share and the "% covered" card sit under them, and the
+   card becomes a sheet along the bottom, with the map (in Puck's view) just above it. */
+@media (max-width: 700px) {
+  #viewbar {
+    top: 8px; left: 0; right: 0; max-width: none; padding: 0 8px;
+    flex-direction: row; align-items: center; overflow-x: auto; scrollbar-width: none;
+  }
+  #viewbar::-webkit-scrollbar { display: none; }
+  #viewbar .views { flex-wrap: nowrap; }
+  #viewbar button, #viewbar .toggles { white-space: nowrap; flex: none; }
+
+  #coverageCard { top: 54px; right: 8px; max-width: 48vw; }
+  #shareBar { top: 54px; left: 8px; transform: none; max-width: calc(52vw - 24px); }
+  #setupTitle { max-width: none; min-width: 0; font-size: 13px; }
+  #sharePanel { top: 100px; left: 8px; right: 8px; width: auto; max-width: none; transform: none; }
+
+  /* Notes go under Share, beside the "% covered" card. That card already says when there's no shot, and the
+     highlighted button says it's Puck's view. */
+  #youArePuck, #noShot { display: none !important; }
+  #flash, #warn {
+    top: 100px; bottom: auto; left: 8px; transform: none; max-width: calc(52vw - 24px);
+    font-size: 12px; padding: 4px 8px; text-align: left;
+  }
+
+  #dock { left: 0; right: 0; bottom: 0; flex-direction: column; align-items: stretch; gap: 6px; }
+  #mapBox { order: -1; margin-right: 8px; }
+  #view[data-sel=goalie] #card:not(.folded) ~ #mapBox,
+  #view[data-sel=hand] #card:not(.folded) ~ #mapBox { display: none !important; }
+  #cornerMap { width: min(220px, 56vw); height: min(200px, 26vh); }
+  #card {
+    flex: none; max-height: 44vh; border-radius: 14px 14px 0 0; border-bottom: 0;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+  #card .hint { font-size: 12px; }
+  .card .val { min-width: 72px; }
+}

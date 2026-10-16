@@ -28,7 +28,7 @@ export interface HandGizmoDeps {
  */
 export function createHandGizmo(d: HandGizmoDeps) {
   const tc = new TransformControls(d.camera, d.canvas);
-  tc.setSize(0.7);
+  tc.setSize(matchMedia('(pointer: coarse)').matches ? 1 : 0.7);   // bigger handles for fingers
   tc.setSpace('local');
   d.scene.add(tc.getHelper());
   const proxy = new THREE.Object3D();
@@ -77,8 +77,19 @@ export function createHandGizmo(d: HandGizmoDeps) {
     setMode(m: GizmoMode) { mode = m; show(hand); },
     /** Re-lines the arrows up with the shot after the hand, the goalie or the Puck moved (not mid-drag). */
     realign() { if (hand && mode === 'translate' && !dragging) alignProxy(hand); },
-    /** The pointer is over one of the gizmo's handles, or dragging one: clicks belong to the gizmo. */
-    get busy() { return dragging || tc.axis !== null; },
+    /**
+     * The press e lands on one of the gizmo's handles, or a drag is under way: it belongs to the gizmo. A mouse has
+     * already hovered the handle, but a touch arrives without hovering, so the handles are hit-tested here.
+     */
+    busy(e: PointerEvent) {
+      if (dragging) return true;
+      if (!tc.object || !tc.enabled) return false;
+      const r = d.canvas.getBoundingClientRect();
+      // The types say a PointerEvent, but it takes the pointer in normalised device coordinates, as its own handler passes it.
+      const ndc = { x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1, button: e.button };
+      tc.pointerHover(ndc as unknown as PointerEvent);
+      return tc.axis !== null;
+    },
     handWorld, shotDir,
   };
 }

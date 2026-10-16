@@ -128,6 +128,15 @@ const gCard = goalieCard($('#goaliePanel'), {
   depthIn: n => { if (goalie.lock !== 'post') { setDepth(goalie, n * IN); updatePlacement(); } },
   follow: on => { goalie.follow = on; updatePlacement(); },
 });
+/** Moves hand w n × 2 cm along the shot: +1 away from the Puck, -1 toward it. */
+function nudgeHand(w: HandKey, n: number) {
+  moveHandToWorld(w, gizmo.handWorld(w).add(gizmo.shotDir(w).multiplyScalar(-0.02 * n)));
+  settleHand(w);
+  updatePose();
+}
+document.querySelectorAll<HTMLElement>('[data-nudge]').forEach(b => b.addEventListener('click', () => {
+  if (isHand(sel)) nudgeHand(sel, Number(b.dataset.nudge));
+}));
 $('[data-reset-hand]').addEventListener('click', () => {
   if (sel !== 'glove' && sel !== 'blocker') return;
   goalie[sel] = defaultHands(goalie.stance, goalie.catchSide)[sel];
@@ -150,8 +159,19 @@ function renderCard() {
 
 const isHand = (k: Selection): k is HandKey => k === 'glove' || k === 'blocker';
 
+// On small screens the card can be folded down to its title, to see more of the picture. Picking something new opens it.
+const card = $('#card'), cardToggle = $('#cardToggle');
+function foldCard(fold: boolean) {
+  card.classList.toggle('folded', fold);
+  cardToggle.setAttribute('aria-expanded', String(!fold));
+  cardToggle.setAttribute('aria-label', fold ? 'Show these controls' : 'Hide these controls');
+}
+cardToggle.addEventListener('click', () => foldCard(!card.classList.contains('folded')));
+
 function select(k: Selection) {
+  if (k !== sel && k !== null) foldCard(false);
   sel = k;
+  view.dataset.sel = isHand(sel) ? 'hand' : sel ?? 'none';   // on a phone, the goalie's and hands' cards stand in for the map
   helpers.turnRing.visible = sel === 'goalie';
   gizmo.show(isHand(sel) ? sel : null);
   // The wheel sets a selected goalie's depth, or moves a selected hand along the shot, instead of zooming.
@@ -305,7 +325,7 @@ function renderViewState() {
   const puckView = currentView === 'puck';
   puckMesh.ring.visible = !puckView;   // up close in Puck's view the ring would fill the screen; the map moves the Puck there
   $('#youArePuck').style.display = puckView ? 'block' : 'none';
-  $('#cornerMap').style.display = $('#mapCap').style.display = puckView ? '' : 'none';
+  $('#mapBox').style.display = puckView ? '' : 'none';
   coverageLayer.lanesVisible = show.cone && !puckView;   // from behind the Puck, the lanes would fill the screen
   viewbar.querySelectorAll<HTMLInputElement>('[data-show]').forEach(i => i.checked = show[i.dataset.show as keyof typeof show]);
   if (cov) { renderMap(); scheduleSave(); }
@@ -352,7 +372,7 @@ function grab(e: PointerEvent, d: Drag) {
 function onPointerDown(e: PointerEvent) {
   downAt = null;
   if (e.target !== canvas || e.button !== 0) return;
-  if (gizmo.busy) { orbit.enabled = false; return; }   // the hand gizmo takes this press
+  if (gizmo.busy(e)) { orbit.enabled = false; return; }   // the hand gizmo takes this press
   setRay(e);
   const hand = ray.intersectObjects([helpers.hands.glove, helpers.hands.blocker])[0];
   if (hand) return select(hand.object === helpers.hands.glove ? 'glove' : 'blocker');
@@ -379,6 +399,7 @@ canvas.addEventListener('pointermove', e => {
   else if (drag.k === 'goalie') dragGoalieTo({ x: p.x + drag.off.x, z: p.z + drag.off.z });
   else turnGoalieToward(p, drag.pivot);
 });
+canvas.addEventListener('pointercancel', () => { drag = null; downAt = null; orbit.enabled = true; });
 canvas.addEventListener('pointerup', e => {
   if (drag) {
     const k = drag.k;
@@ -395,10 +416,7 @@ canvas.addEventListener('wheel', e => {
   if (isHand(sel)) {
     e.preventDefault();
     const n = wheelNotches(e);
-    if (!n) return;
-    moveHandToWorld(sel, gizmo.handWorld(sel).add(gizmo.shotDir(sel).multiplyScalar(-0.02 * n)));
-    settleHand(sel);
-    updatePose();
+    if (n) nudgeHand(sel, n);
     return;
   }
   // A selected goalie: the wheel sets its depth, 1 inch per notch (wheel up = further out). Otherwise it zooms.
@@ -453,7 +471,10 @@ function renderName() {
 function openShare(open: boolean) {
   sharePanel.hidden = !open;
   shareBtn.setAttribute('aria-expanded', String(open));
-  if (open) { saveNow(); nameInput.focus(); }
+  if (open) {
+    saveNow();
+    if (matchMedia('(hover: hover)').matches) nameInput.focus();   // on a phone, focusing would pop the keyboard up over it
+  }
 }
 shareBtn.addEventListener('click', () => openShare(sharePanel.hidden !== false));
 nameInput.addEventListener('input', () => { setupName = nameInput.value.slice(0, NAME_MAX); renderName(); scheduleSave(); });
@@ -500,6 +521,7 @@ function resize() {
   camera.aspect = r.width / r.height;
   camera.updateProjectionMatrix();
   refollowView();   // Puck's view fits the net to the window's shape
+  if (cov) renderMap();   // the map changes size on small screens, e.g. when a phone is turned
 }
 addEventListener('resize', resize);
 

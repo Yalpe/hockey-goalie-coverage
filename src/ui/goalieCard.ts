@@ -45,7 +45,7 @@ export function goalieCard(el: HTMLElement, act: GoalieCardActions) {
       <span class="val" data-depth-val></span>
     </div>
     <div class="hint">Depth is how far the toes are out from the middle of the goal line.
-      − / + and the mouse wheel (over a slider, or anywhere while the goalie is selected) move 1 inch.</div>
+      − / + <span class="mouse">and the mouse wheel (over a slider, or anywhere while the goalie is selected) </span>move 1 inch.</div>
     <div class="row"><label></label>
       <label class="check"><input type="checkbox" data-follow> Follow the Puck (square to it and on its angle)</label>
     </div>`;
