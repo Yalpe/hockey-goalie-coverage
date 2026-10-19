@@ -3,8 +3,8 @@
 // piece keeps the coverage cheap. Chosen over the boxes and over a many-piece build in the gear-shapes prototype (branch
 // prototype/gear-shapes). Sizes still come from goalieDims. The pad hulls stay inside the posing module's pad boxes
 // (which placement, frontReach and the post, still go by), but for the boot, which reaches over the skate toe.
-import type { Hand, Leg, Pose } from '../posing/posing';
-import { add, cross, dot, FWD, mul, norm, sub, UP, type Vec } from '../posing/vec';
+import { skateAxes, type Hand, type Leg, type Pose } from '../posing/posing';
+import { add, cross, dot, mul, norm, sub, type Vec } from '../posing/vec';
 import type { Part, PartMat } from './parts';
 
 /** A local frame: origin and three axes. */
@@ -112,17 +112,16 @@ function stick(pose: Pose, out: Part[]) {
 
 // Skates, under the ankle, toe pointing where the pad faces (the pad's toe is tied to it). Frame: origin at the bottom
 // of the steel, x toward the toe, y up the skate, z across. On a leg standing on its skate (the same test as
-// frontReach) the skate stands flat on the ice. On a kneeling leg the ankle stays square: the sole faces out along the
+// frontReach) the skate leans with the shin onto its edge (skateAxes). On a kneeling leg the ankle stays square: the sole faces out along the
 // shin, just past the pad's boot, which covers the toe. The steel and holder lift the sole SKATE_LIFT (the lift in
 // ankleH); the boot runs from the sole up into the pad, toe at 0.7 of the foot.
 const SKATE_LIFT = 0.1016;
 function skateFrame(pose: Pose, l: Leg): Frame {
-  const n = l.pads[0].n;
   if (l.shinDir.y < -0.5) {
-    const fwd = Math.hypot(n.x, n.z) > 1e-3 ? norm({ x: n.x, y: 0, z: n.z }) : FWD;
-    return { o: { x: l.ankle.x, y: 0, z: l.ankle.z }, x: fwd, y: UP, z: cross(fwd, UP) };
+    const { fwd, up } = skateAxes(l);
+    return { o: sub(l.ankle, mul(up, pose.dims.ankleH)), x: fwd, y: up, z: cross(fwd, up) };
   }
-  const up = mul(l.shinDir, -1), fwd = norm(sub(n, mul(up, dot(n, up))));
+  const n = l.pads[0].n, up = mul(l.shinDir, -1), fwd = norm(sub(n, mul(up, dot(n, up))));
   return { o: sub(l.ankle, mul(up, pose.dims.ankleH)), x: fwd, y: up, z: cross(fwd, up) };
 }
 function skates(pose: Pose, out: Part[]) {

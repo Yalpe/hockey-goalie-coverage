@@ -74,6 +74,8 @@ export function encodeSetup(s: Setup): string {
     put('f', Math.round(g.facingDeg), V1.facingDeg);
   }
   put('fo', g.follow ? 1 : 0, 0);
+  put('fl', Math.round((g.flare ?? 0) * 100), 0);   // Flare, in whole percent
+  if (g.feetWidthIn) o.fw = g.feetWidthIn;           // stand-up Feet width in inches; left out for the usual stance
   const def = v1Hands(g.stance, g.catchSide);
   for (const [w, key] of [['glove', 'g'], ['blocker', 'b']] as const) {
     const diff: Record<string, number> = {};
@@ -156,6 +158,7 @@ function decodeV1(o: Record<string, unknown>): Setup {
     goalie: {
       stance, catchSide, heightM, gripAboveIn: V1.gripAboveIn, ...hands,
       facingDeg, lock, arcR, pos, follow: int('fo', 0, 0, 1) === 1,
+      flare: int('fl', 0, 0, 100) / 100, feetWidthIn: o.fw === undefined ? undefined : int('fw', 0, 8, 60),
     },
     puck: { x: int('px', V1.puckCm.x, -2000, 2000) / 100, z: int('pz', V1.puckCm.z, -500, 3000) / 100 },
     view: code('v', VIEW_CODES, V1.view),

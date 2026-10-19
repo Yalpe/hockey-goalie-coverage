@@ -1,7 +1,7 @@
 import { goalieParts } from './coverage/parts';
 import { CREASE_RADIUS, IN, RINGETTE_CREASE_RADIUS, MOUTH_HALF_W, POST_R } from './dims';
 import {
-  boxCorners, defaultHands, frontReach, placeAtPost, postFacing, STANCES,
+  boxCorners, defaultHands, feetWidthRangeIn, frontReach, placeAtPost, postFacing, STANCES,
   type HandTarget, type Pose, type PoseSetup, type StanceKey,
 } from './posing/posing';
 
@@ -51,13 +51,41 @@ export function quantHand(t: HandTarget): HandTarget {
 export function setStance(g: GoalieSetup, stance: StanceKey) {
   const post = STANCES[stance].post;
   g.stance = stance;
-  Object.assign(g, defaultHands(stance, g.catchSide));
+  Object.assign(g, defaultHands(g));
   if (post) { g.lock = 'post'; g.facingDeg = postFacing(g.stance); }
   else if (g.lock === 'post') { g.lock = 'arc'; g.arcR = CREASE_RADIUS; g.facingDeg = 0; }
 }
 
+/**
+ * Stand-up's default hands are worked out for the goalie's body. A change to the body keeps them at the default
+ * if they were there; hands the coach has placed stay put.
+ */
+function keepingDefaultHands(g: GoalieSetup, change: () => void) {
+  const was = defaultHands(g), atDefault = (['glove', 'blocker'] as const).every(w =>
+    JSON.stringify(quantHand(g[w])) === JSON.stringify(quantHand(was[w])));
+  change();
+  if (atDefault) Object.assign(g, defaultHands(g));
+}
+
 export function setHeightIn(g: GoalieSetup, inches: number) {
-  g.heightM = clamp(Math.round(inches), HEIGHT_MIN_IN, HEIGHT_MAX_IN) * IN;
+  keepingDefaultHands(g, () => {
+    g.heightM = clamp(Math.round(inches), HEIGHT_MIN_IN, HEIGHT_MAX_IN) * IN;
+    if (g.feetWidthIn) clampFeetWidth(g, g.feetWidthIn);   // a shorter goalie can't stand as wide
+  });
+}
+
+/** Flare moves in whole percent. */
+export function setFlarePct(g: GoalieSetup, pct: number) {
+  g.flare = clamp(Math.round(pct), 0, 100) / 100;
+}
+
+/** Stand-up feet width, ankle to ankle, moves in whole inches within what the goalie's height allows. */
+export function setFeetWidthIn(g: GoalieSetup, inches: number) {
+  keepingDefaultHands(g, () => clampFeetWidth(g, inches));
+}
+function clampFeetWidth(g: GoalieSetup, inches: number) {
+  const [lo, hi] = feetWidthRangeIn(g.heightM);
+  g.feetWidthIn = clamp(Math.round(inches), lo, hi);
 }
 
 // The body parts that must stay out of the post. Arms, hands and stick are left out: the coach places those.

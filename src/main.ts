@@ -6,7 +6,7 @@ import { nameHoles } from './coverage/holes';
 import { goalieParts } from './coverage/parts';
 import { IN, PUCK_HALF_T } from './dims';
 import {
-  applyFollow, depthNow, DEPTH_SPOTS, lockToPost, moveGoalieTo, placeGoalie, quantHand, setDepth, setFacing, setHeightIn, setStance,
+  applyFollow, depthNow, DEPTH_SPOTS, lockToPost, moveGoalieTo, placeGoalie, quantHand, setDepth, setFacing, setFeetWidthIn, setFlarePct, setHeightIn, setStance,
 } from './goalie';
 import { defaultHands, solvePose, type HandKey, type Pose } from './posing/posing';
 import { createCoverageLayer } from './scene/coverageLayer';
@@ -86,7 +86,7 @@ const handSide = (w: HandKey) => (w === 'glove') === (goalie.catchSide === 'left
 /** Asks for hand w at world position p; the posing module clamps it to the Stance's limits and arm reach. */
 function moveHandToWorld(w: HandKey, p: THREE.Vector3) {
   const l = goalieRoot.worldToLocal(p.clone()), s = handSide(w), H = goalie.heightM;
-  goalie[w] = quantHand({ ...goalie[w], out: l.x * s / H, up: l.y / H, fwd: l.z / H });
+  goalie[w] = quantHand({ ...goalie[w], out: l.x * s / H, up: (l.y + pose.sink) / H, fwd: l.z / H });
   updatePose();
 }
 /** Takes where a held-back hand actually ended up as its new setting. */
@@ -98,7 +98,7 @@ const gizmo = createHandGizmo({
   onTurn: (w, ball) => {
     const p = ball.position, s = handSide(w), H = goalie.heightM;
     const e = new THREE.Euler().setFromQuaternion(ball.quaternion, 'YXZ');
-    goalie[w] = quantHand({ out: p.x * s / H, up: p.y / H, fwd: p.z / H, yaw: s * e.y * DEG, pitch: -e.x * DEG, roll: -s * e.z * DEG });
+    goalie[w] = quantHand({ out: p.x * s / H, up: (p.y + pose.sink) / H, fwd: p.z / H, yaw: s * e.y * DEG, pitch: -e.x * DEG, roll: -s * e.z * DEG });
     updatePose(true);
   },
   onDragging: (on, w) => {
@@ -127,6 +127,8 @@ const gCard = goalieCard($('#goaliePanel'), {
   post: () => { lockToPost(goalie); updatePlacement(); },
   depthIn: n => { if (goalie.lock !== 'post') { setDepth(goalie, n * IN); updatePlacement(); } },
   follow: on => { goalie.follow = on; updatePlacement(); },
+  flarePct: n => { setFlarePct(goalie, n); updatePose(); },
+  feetWidthIn: n => { setFeetWidthIn(goalie, n); updatePose(); },
 });
 /** Moves hand w n × 2 cm along the shot: +1 away from the Puck, -1 toward it. */
 function nudgeHand(w: HandKey, n: number) {
@@ -139,7 +141,7 @@ document.querySelectorAll<HTMLElement>('[data-nudge]').forEach(b => b.addEventLi
 }));
 $('[data-reset-hand]').addEventListener('click', () => {
   if (sel !== 'glove' && sel !== 'blocker') return;
-  goalie[sel] = defaultHands(goalie.stance, goalie.catchSide)[sel];
+  goalie[sel] = defaultHands(goalie)[sel];
   updatePose();
 });
 const map = cornerMap($<SVGSVGElement>('#cornerMap'), {
@@ -152,7 +154,7 @@ const map = cornerMap($<SVGSVGElement>('#cornerMap'), {
 function renderCard() {
   const panel = sel === 'glove' || sel === 'blocker' ? 'hand' : sel ?? 'none';
   document.querySelectorAll<HTMLElement>('#card [data-panel]').forEach(d => d.hidden = d.dataset.panel !== panel);
-  if (sel === 'goalie') gCard.render(goalie, depthNow(goalie, pose));
+  if (sel === 'goalie') gCard.render(goalie, depthNow(goalie, pose), Math.abs(pose.legs[0].ankle.x - pose.legs[1].ankle.x));
   $('[data-hand-title]').textContent = sel === 'glove' ? 'Glove Hand' : 'Blocker Hand (and stick)';
   document.querySelectorAll<HTMLElement>('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === gizmo.mode));
 }

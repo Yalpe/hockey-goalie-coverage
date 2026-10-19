@@ -7,7 +7,7 @@ import { createGoalieMesh } from '../src/scene/goalieMesh';
 const q = new URLSearchParams(location.search);
 const stance = (q.get('stance') ?? 'standup') as StanceKey, heightM = +(q.get('h') ?? 1.75);
 const catchSide = q.get('catch') === 'right' ? 'right' : 'left';
-const pose = solvePose({ stance, heightM, catchSide, gripAboveIn: 3, ...defaultHands(stance, catchSide) });
+const body = { stance, heightM, catchSide, gripAboveIn: 3 }, pose = solvePose({ ...body, ...defaultHands(body) });
 
 const scene = new THREE.Scene();
 scene.add(new THREE.HemisphereLight(0xffffff, 0x99aabb, 1.4));

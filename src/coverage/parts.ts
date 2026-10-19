@@ -2,7 +2,7 @@
 // MODULE. The coverage dilates each part by the Puck; the goalie mesh draws the same parts, so what you see is what
 // covers the net.
 import type { Pose } from '../posing/posing';
-import { add, dot, FWD, mul, norm, sub, type Vec } from '../posing/vec';
+import { add, dot, FWD, len, mul, norm, sub, type Vec } from '../posing/vec';
 import { gearParts } from './gearShapes';
 
 export type PartMat = 'body' | 'jersey' | 'pad' | 'glove' | 'blocker' | 'trim' | 'stick' | 'blade';
@@ -34,8 +34,24 @@ export function goalieParts(pose: Pose): Part[] {
     cap(w + 'UpperArm', h.shoulder, h.elbow, 0.04 * H, 'jersey');
     cap(w + 'Forearm', h.elbow, h.wrist, 0.035 * H, 'jersey');
   }
-  parts.push(...gearParts(pose));
+  const gear = gearParts(pose);
+  stopBehindBoard(parts.find(p => p.id === 'blockerForearm') as CapsulePart, gear.find(p => p.id === 'blocker') as HullPart, pose);
+  parts.push(...gear);
   return parts;
+}
+
+/**
+ * The blocker forearm goes into the blocker's cuff behind the board, so it stops short: its rounded end stays behind the
+ * board's back face instead of coming out through the board. A forearm running along the board (hardly toward it) can
+ * only stop so short, at 60% of its length; what's left over, its end is tucked back behind the board.
+ */
+function stopBehindBoard(arm: CapsulePart, board: HullPart, pose: Pose) {
+  const f = pose.blocker.face, wrist = pose.blocker.wrist, gap = 0.003;
+  const back = Math.min(...board.pts.map(p => dot(sub(p, wrist), f)));   // the board's back face, out along its face
+  const over = () => dot(sub(arm.b, wrist), f) + arm.r - (back - gap);    // how far the round end is past it
+  const along = sub(arm.b, arm.a), l = len(along), dir = mul(along, 1 / l), c = dot(dir, f);
+  if (over() > 0 && c > 0) arm.b = sub(arm.b, mul(dir, Math.min(over() / c, 0.6 * l)));
+  if (over() > 0) arm.b = sub(arm.b, mul(f, over()));
 }
 
 /** A part's geometry to 0.01 mm, ignoring its material: equal signatures mean nothing needs rebuilding. */

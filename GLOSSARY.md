@@ -51,6 +51,14 @@ _Avoid_: Stick hand
 **Catch Side**:
 Which hand the goaltender catches with, left or right; the Blocker Hand is the other.
 
+**Flare**:
+In the Butterfly, how far the goaltender sits back (the "butt drop", used to give up depth on a breakaway): the hips drop and the feet swing out wider, the pads lying flatter along the ice.
+_Avoid_: Butt drop (as a setting name), feet width
+
+**Feet Width**:
+In the Stand-up, how far apart the skates are, ankle to ankle. A wider stance keeps the knees where they are: the shins angle out, the skates go onto their inside edges and the hips drop.
+_Avoid_: Stance width
+
 **Depth**:
 How far out the goaltender plays: the distance from the middle of the goal line to the goaltender's toes (skate toes when upright, the front edge of the pad on the ice when kneeling). "Top of the crease" is a Depth equal to the crease radius.
 _Avoid_: Distance, gap

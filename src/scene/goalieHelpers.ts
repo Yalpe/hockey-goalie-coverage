@@ -4,20 +4,19 @@ import type { HandKey, Pose } from '../posing/posing';
 const DEG = 180 / Math.PI;
 
 /**
- * Things to grab on the goalie, in its own frame: a ball on each hand (yellow = glove, blue = blocker), drawn over
- * everything so it can always be clicked, and the turn ring round its feet with a knob straight ahead.
+ * Things to grab on the goalie, in its own frame: a ball on each hand, and the turn ring round its feet with a knob
+ * straight ahead. The hand balls aren't drawn (the glove and blocker are what the coach clicks); they stay as
+ * the hands' handles: still hit by a click, and what the move and turn gizmo holds.
  */
 export function createGoalieHelpers() {
   const group = new THREE.Group();
   group.name = 'goalieHelpers';
-  const ball = (color: number) => {
-    const m = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12),
-      new THREE.MeshBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.85 }));
-    m.renderOrder = 10;
+  const ball = () => {
+    const m = new THREE.Mesh(new THREE.SphereGeometry(0.035, 16, 12), new THREE.MeshBasicMaterial({ visible: false }));
     group.add(m);
     return m;
   };
-  const hands: Record<HandKey, THREE.Mesh> = { glove: ball(0xf59e0b), blocker: ball(0x2563eb) };
+  const hands: Record<HandKey, THREE.Mesh> = { glove: ball(), blocker: ball() };
 
   const turnRing = new THREE.Group();
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.92, 0.97, 64),

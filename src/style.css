@@ -69,6 +69,7 @@ html, body {
 }
 .card .title { display: block; font-size: 15px; margin-bottom: 4px; }
 .card .row { display: flex; gap: 6px; align-items: center; margin: 6px 0; }
+.card .row[hidden] { display: none; }
 .card .row > label:first-child { min-width: 64px; color: var(--muted); }
 .card .btns { display: flex; gap: 4px; flex-wrap: wrap; }
 .card button {
