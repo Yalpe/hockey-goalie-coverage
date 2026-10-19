@@ -16,6 +16,8 @@ export const NET_TOP_DEPTH = 18 * IN;         // cosmetic, unverified
 
 // Crease and lines
 export const CREASE_RADIUS = 72 * IN;
+// Ringette crease: an 8 ft semicircle round the same centre, in a 2 in blue line (Ringette Canada line markings, 2012).
+export const RINGETTE_CREASE_RADIUS = 96 * IN;
 export const LINE_W = 2 * IN;
 
 // Puck

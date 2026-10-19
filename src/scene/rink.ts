@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CREASE_RADIUS, FT, IN, LINE_W } from '../dims';
+import { CREASE_RADIUS, FT, IN, LINE_W, RINGETTE_CREASE_RADIUS } from '../dims';
 
 // The whole defending zone on a standard 200 × 85 ft sheet. The research gives the goal line 11 ft from the end boards
 // and the corners a 28 ft radius; the other markings are standard and cosmetic: blue line 64 ft out from the goal line,
@@ -100,6 +100,8 @@ export function buildRink(): THREE.Group {
   // Crease: a 6 ft semicircle, light blue inside a red line.
   flat(new THREE.CircleGeometry(CREASE_RADIUS, 48, Math.PI, Math.PI), COLORS.crease, CREASE_FILL);
   flat(new THREE.RingGeometry(CREASE_RADIUS - LINE_W, CREASE_RADIUS, 64, 1, Math.PI, Math.PI), COLORS.red, DOTS_ON_TOP);
+  // Ringette crease: an 8 ft semicircle round the same centre, a blue line only.
+  flat(new THREE.RingGeometry(RINGETTE_CREASE_RADIUS - LINE_W, RINGETTE_CREASE_RADIUS, 64, 1, Math.PI, Math.PI), COLORS.blue, DOTS_ON_TOP);
 
   g.add(buildBoards());
   return g;

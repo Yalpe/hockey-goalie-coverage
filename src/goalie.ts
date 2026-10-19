@@ -1,5 +1,5 @@
 import { goalieParts } from './coverage/parts';
-import { CREASE_RADIUS, IN, MOUTH_HALF_W, POST_R } from './dims';
+import { CREASE_RADIUS, IN, RINGETTE_CREASE_RADIUS, MOUTH_HALF_W, POST_R } from './dims';
 import {
   boxCorners, defaultHands, frontReach, placeAtPost, postFacing, STANCES,
   type HandTarget, type Pose, type PoseSetup, type StanceKey,
@@ -33,8 +33,8 @@ export interface GoalieSetup extends PoseSetup {
 export const HEIGHT_MIN_IN = 43, HEIGHT_MAX_IN = 79;
 /** Depth moves in whole inches between these. */
 export const DEPTH_MIN_IN = 24, DEPTH_MAX_IN = 157;
-/** The Top / Mid / Deep buttons, in whole inches: top of the crease (6 ft), about 1.35 m, about 0.95 m. */
-export const DEPTH_SPOTS = { top: CREASE_RADIUS, mid: 53 * IN, deep: 37 * IN } as const;
+/** The Out / Top / Mid / Deep buttons, in whole inches: the ringette crease (8 ft), top of the crease (6 ft), about 1.35 m, about 0.95 m. */
+export const DEPTH_SPOTS = { out: RINGETTE_CREASE_RADIUS, top: CREASE_RADIUS, mid: 53 * IN, deep: 37 * IN } as const;
 export type DepthSpot = keyof typeof DEPTH_SPOTS;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));

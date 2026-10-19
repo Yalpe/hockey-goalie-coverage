@@ -35,7 +35,7 @@ export function goalieCard(el: HTMLElement, act: GoalieCardActions) {
       <span class="val" data-height-val></span>
     </div>
     <div class="row"><label>Depth</label><span class="btns">
-      <button type="button" data-spot="top">Top</button><button type="button" data-spot="mid">Mid</button>
+      <button type="button" data-spot="out">Out</button><button type="button" data-spot="top">Top</button><button type="button" data-spot="mid">Mid</button>
       <button type="button" data-spot="deep">Deep</button><button type="button" data-post>Post</button>
     </span></div>
     <div class="row"><label></label>
