@@ -46,23 +46,32 @@ export function goalieDims(H: number) {
 }
 
 type Triple = [number, number, number];
-// Leg directions are [outward, up, forward]; thigh = hip->knee, shin = knee->ankle.
-interface FixedLeg { thigh: Triple; shin: Triple; padFace?: Triple }
+// A leg by its joints, in degrees, from standing straight. Hip: flex swings the thigh forward, abd swings it out to
+// the side, rot turns the kneecap in (internal rotation). The knee is a hinge: it only bends, so the shin always swings
+// in the plane the kneecap faces, and a leg can't be made that a real knee couldn't hold.
+export interface JointLeg { flex: number; abd: number; rot: number; knee: number }
+// Joint ranges: a flexible athlete's, with internal rotation at the goalie end (the butterfly needs about 70°).
+export const LEG_RANGE: Record<keyof JointLeg, [number, number]> = {
+  flex: [-20, 125], abd: [-30, 50], rot: [-45, 70], knee: [0, 150],
+};
+// The planted leg is solved by IK to a foot spot [outward, forward] (fractions of H); the pole says where the knee points.
 interface PlantedLeg { plant: { foot: [number, number]; pole: Triple } }
-type LegDef = FixedLeg | PlantedLeg;
+type LegDef = JointLeg | PlantedLeg;
 
-const STANDUP_LEG: FixedLeg = { thigh: [-0.05, -0.5, 0.87], shin: [0.3, -0.86, -0.4] };
-const BUTTERFLY_LEG: FixedLeg = { thigh: [-0.12, -0.75, 0.6], shin: [1, 0, -0.45] };
-// RVH post leg: the goalie sits almost on top of the post knee. The pad lies flat on the ice, and the shin runs out
-// to the post along the goal line. Local directions are worked out for a body turned 30° toward the post:
-// the shin is turned 30° forward, and the thigh drops slightly back and in, so that the knee sits on the pad's line
-// just in front of the goal line. The pad stands on its inner edge like a butterfly pad, its face turned back 30° so
-// it faces straight out from the net.
-const RVH_POST_LEG: FixedLeg = { thigh: [-0.077, -0.40, -0.166], shin: [0.866, 0, 0.5], padFace: [-0.5, 0, 0.866] };
+const STANDUP_LEG: JointLeg = { flex: 60, abd: -3, rot: 18, knee: 86 };
+const BUTTERFLY_LEG: JointLeg = { flex: 39, abd: -7, rot: 70, knee: 112 };
+// RVH post leg: in the butterfly position, the pad flat on the ice with its toe at the post. A flat shin can't point
+// any further forward than the butterfly's flare (about 25° behind straight out) without turning the hip in past what
+// it can, so the hips stay square to the net (see hipTurn) while the shoulders turn to the post, and the pad runs
+// from the post out along the ice, the knee a little in front of the goal line.
+const RVH_POST_LEG = BUTTERFLY_LEG;
 // RVH far leg: skate planted wide out to the side, knee forward and low, shin running out and down to the skate.
-// Solved by IK to a foot spot [outward, forward] (fractions of H).
 const RVH_FAR_LEG: PlantedLeg = { plant: { foot: [0.45, 0.02], pole: [0.2, 0.5, 1] } };
 export const RVH_TURN_DEG = 30;   // body rotation toward the post
+const RVH_HIP_TURN_DEG = 30;      // the hips turned back from that, square to the net
+// Stick lie: the angle between the shaft and the blade line behind the heel, measured off a reference photo of a
+// stand-up goalie (hand about 0.55 m up and 0.30 m to the blocker side of the heel, paddle about 0.7 m).
+const STICK_LIE_DEG = 65;
 // Overlap: standing on the post, squared to a shooter driving wide, so turned well round toward the post.
 export const OVERLAP_TURN_DEG = 67;
 
@@ -70,19 +79,21 @@ interface StanceDef {
   label: string;
   lean: number;
   sideLean?: number;
-  leg?: FixedLeg;
+  leg?: JointLeg;
   /** Post Stances (RVH, Overlap): which post (+1 = the goalie's left), and how far the body turns toward it. */
   post?: Side;
   postTurn?: number;
+  /** How far the hips turn back from the post, against the shoulders (a twist at the waist). */
+  hipTurn?: number;
   /** The post-side leg, if it differs from leg (RVH, Overlap); RVH's far leg is planted instead. */
-  postLeg?: FixedLeg;
+  postLeg?: JointLeg;
   farLeg?: PlantedLeg;
 }
 export const STANCES: Record<StanceKey, StanceDef> = {
   standup:   { label: 'Stand-up',   lean: 45, leg: STANDUP_LEG },
-  butterfly: { label: 'Butterfly',  lean: 12, leg: BUTTERFLY_LEG },
-  rvhL:      { label: 'RVH left',   lean: 5, sideLean: 30, post: +1, postTurn: RVH_TURN_DEG, postLeg: RVH_POST_LEG, farLeg: RVH_FAR_LEG },
-  rvhR:      { label: 'RVH right',  lean: 5, sideLean: 30, post: -1, postTurn: RVH_TURN_DEG, postLeg: RVH_POST_LEG, farLeg: RVH_FAR_LEG },
+  butterfly: { label: 'Butterfly',  lean: 20, leg: BUTTERFLY_LEG },
+  rvhL:      { label: 'RVH left',   lean: 15, sideLean: 30, post: +1, postTurn: RVH_TURN_DEG, hipTurn: RVH_HIP_TURN_DEG, postLeg: RVH_POST_LEG, farLeg: RVH_FAR_LEG },
+  rvhR:      { label: 'RVH right',  lean: 15, sideLean: 30, post: -1, postTurn: RVH_TURN_DEG, hipTurn: RVH_HIP_TURN_DEG, postLeg: RVH_POST_LEG, farLeg: RVH_FAR_LEG },
   overlapL:  { label: 'Overlap left',  lean: 45, leg: STANDUP_LEG, post: +1, postTurn: OVERLAP_TURN_DEG },
   overlapR:  { label: 'Overlap right', lean: 45, leg: STANDUP_LEG, post: -1, postTurn: OVERLAP_TURN_DEG },
 };
@@ -128,8 +139,8 @@ export function placeAtPost(pose: Pose, stance: StanceKey, facingDeg: number) {
 // Hand targets also carry wrist angles in degrees: yaw = face turned outward, pitch = face tilted up, roll = top twisted outward.
 const NO_ROT: WristRot = { yaw: 0, pitch: 0, roll: 0 };
 export const DEFAULT_TARGETS: Record<'standup' | 'butterfly', Record<HandKey, HandTarget>> = {
-  standup:   { glove: { out: 0.24, up: 0.47, fwd: 0.34, ...NO_ROT, pitch: -20 }, blocker: { out: 0.16, up: 0.38, fwd: 0.32, ...NO_ROT } },
-  butterfly: { glove: { out: 0.24, up: 0.36, fwd: 0.26, ...NO_ROT, pitch: -20 }, blocker: { out: 0.16, up: 0.29, fwd: 0.25, ...NO_ROT } },
+  standup:   { glove: { out: 0.24, up: 0.47, fwd: 0.34, ...NO_ROT, pitch: -20 }, blocker: { out: 0.222, up: 0.38, fwd: 0.321, ...NO_ROT } },
+  butterfly: { glove: { out: 0.24, up: 0.292, fwd: 0.243, ...NO_ROT, pitch: -20 }, blocker: { out: 0.222, up: 0.29, fwd: 0.25, ...NO_ROT } },
 };
 // RVH: the post-side hand seals the hole beside the post-side hip. A far glove sits in front of the chest;
 // a far blocker stays low enough to keep the blade on the ice.
@@ -183,6 +194,14 @@ const rz = (v: Vec, a: number) => V(v.x * Math.cos(a) - v.y * Math.sin(a), v.x *
 // Same as a three.js Euler(-pitch, side*yaw, -side*roll, 'YXZ').
 const wristRotate = (v: Vec, side: Side, r: WristRot) => ry(rx(rz(v, -side * r.roll * RAD), -r.pitch * RAD), side * r.yaw * RAD);
 
+/** A leg's thigh (hip->knee) and shin (knee->ankle) directions from its joints, for a left leg (+x outward). */
+export function jointDirs(j: JointLeg): { thigh: Vec; shin: Vec } {
+  const a = (k: keyof JointLeg) => clamp(j[k], LEG_RANGE[k][0], LEG_RANGE[k][1]) * RAD;
+  const hip = (v: Vec) => rx(rz(ry(v, -a('rot')), a('abd')), -a('flex'));
+  const thigh = hip(V(0, -1, 0)), kneecap = hip(FWD), k = a('knee');
+  return { thigh, shin: sub(mul(thigh, Math.cos(k)), mul(kneecap, Math.sin(k))) };
+}
+
 function legDefFor(st: StanceDef, side: Side): LegDef {
   return side === st.post && st.postLeg ? st.postLeg : st.leg ?? st.farLeg!;
 }
@@ -190,22 +209,24 @@ function legDefFor(st: StanceDef, side: Side): LegDef {
 /** An oriented box: len along u, depth along n, width along u×n. */
 export interface PadBox { center: Vec; u: Vec; n: Vec; len: number; width: number; depth: number }
 
-// A pad is two boxes: the shin part (boot to knee roll) and the thigh rise, which follows the thigh up from the knee.
+// A pad is two boxes: the shin part (boot to knee roll) and the thigh rise, which carries straight on up from the knee:
+// a pad is rigid, so the rise stays in line with the shin (standing it juts forward over the knee; kneeling it lies on
+// the ice, past the knee toward the other pad).
 const KNEE_ROLL = 0.04;
 /** The end of the pad's boot, on its axis: past the ankle by the skate's height, so the boot covers the skate. */
 function bootEnd(d: Dims, knee: Vec, ankle: Vec): Vec {
   return sub(ankle, mul(norm(sub(knee, ankle)), d.ankleH - 0.01));
 }
-// face: the pad face direction (default straight ahead).
-function padBoxes(d: Dims, hip: Vec, knee: Vec, ankle: Vec, face: Vec = FWD): PadBox[] {
+// The pad faces straight ahead, as far as its leg lets it.
+function padBoxes(d: Dims, knee: Vec, ankle: Vec): PadBox[] {
   const box = (from: Vec, dir: Vec, l: number, width: number, depth: number): PadBox => {
-    const n = norm(sub(face, mul(dir, dot(face, dir))));
+    const n = norm(sub(FWD, mul(dir, dot(FWD, dir))));
     return { center: add(add(from, mul(dir, l / 2)), mul(n, depth / 2 - 0.04)), u: dir, n, len: l, width, depth };
   };
   const u = norm(sub(knee, ankle));                        // up the shin
   const bottom = bootEnd(d, knee, ankle);
   const shin = box(bottom, u, len(sub(knee, bottom)) + KNEE_ROLL, d.padWidth, d.padDepth);
-  const rise = box(knee, norm(sub(hip, knee)), d.padTop - d.kneeRef, 0.6 * d.padWidth, 0.8 * d.padDepth);
+  const rise = box(knee, u, d.padTop - d.kneeRef, d.padWidth, 0.6 * d.padDepth);   // full width, thinner
   return [shin, rise];
 }
 
@@ -242,8 +263,10 @@ export interface Hand {
   placedFrac: HandTarget;
 }
 export interface Stick {
-  grip: Vec; heel: Vec; dir: Vec; knob: Vec; toeDir: Vec;
-  headingDeg: number; gripDist: number; onIce: boolean; lift: number; bladeAhead: number; shaftAngleDeg: number;
+  /** dir: up the shaft; across: square to it in the stick's plane, toward the toe; toeDir: along the blade to its toe,
+   *  flat on the ice; face: out of the stick's front face. */
+  grip: Vec; heel: Vec; dir: Vec; across: Vec; knob: Vec; toeDir: Vec; face: Vec;
+  onIce: boolean; lift: number;
 }
 export interface Pose {
   dims: Dims;
@@ -266,20 +289,34 @@ export function solvePose(setup: PoseSetup, clamps: Clamps = DEFAULT_CLAMPS): Po
 
   // Legs hang from the pelvis at y=0, then the whole body is lifted until its lowest point touches the ice.
   // Planted legs (skate on the ice) are solved after, by IK from the grounded hip.
+  // Legs are built square to the hips, then turned with them (hipTurn) round the pelvis.
   type Hung = Leg | { side: Side; hip: Vec; plant: PlantedLeg['plant'] };
+  const hipYaw = -(st.post ?? 0) * (st.hipTurn ?? 0) * RAD, twist = (v: Vec) => ry(v, hipYaw);
   const hung: Hung[] = ([1, -1] as Side[]).map(side => {
     const def = legDefFor(st, side);
-    const dir = (v: Triple) => norm(V(side * v[0], v[1], v[2]));
     const hip = V(side * d.hipHalf, 0, 0);
-    if ('plant' in def) return { side, hip, plant: def.plant };
-    const shinDir = dir(def.shin);
-    const knee = add(hip, mul(dir(def.thigh), d.thigh));
-    const ankle = add(knee, mul(shinDir, d.shank));
-    const pads = padBoxes(d, hip, knee, ankle, def.padFace && V(side * def.padFace[0], def.padFace[1], def.padFace[2]));
-    // Pads can't pass through each other: push the lower leg out until its pads stop at the centreline.
-    const inner = Math.min(...pads.flatMap(b => boxCorners(b).map(c => c.x * side)));
-    const push = V(Math.max(0, -inner) * side, 0, 0);
-    return { side, hip, knee: add(knee, push), ankle: add(ankle, push), shinDir, pads: pads.map(b => ({ ...b, center: add(b.center, push) })) };
+    if ('plant' in def) return { side, hip: twist(hip), plant: def.plant };
+    const mirror = (v: Vec) => V(side * v.x, v.y, v.z);
+    const build = (jl: JointLeg) => {
+      const j = jointDirs(jl), shinDir = mirror(j.shin), knee = add(hip, mul(mirror(j.thigh), d.thigh));
+      const ankle = add(knee, mul(shinDir, d.shank)), pads = padBoxes(d, knee, ankle);
+      return { shinDir, knee, ankle, pads, inner: Math.min(...pads.flatMap(b => boxCorners(b).map(c => c.x * side))) };
+    };
+    // Pads can't pass through each other: spread the knee until the pads stop at the centreline. More hip abduction
+    // alone would tip the shin (a butterfly pad would lift off the ice), so at each step the knee bends to keep the
+    // shin's tilt. If the hip runs out of range, push the lower leg the rest of the way out.
+    let leg = build(def);
+    const tilt = leg.shinDir.y;
+    for (let abd = def.abd + 1; leg.inner < 0 && abd <= LEG_RANGE.abd[1]; abd++) {
+      let best = Infinity;
+      for (let knee = LEG_RANGE.knee[0]; knee <= LEG_RANGE.knee[1]; knee++) {
+        const off = Math.abs(jointDirs({ ...def, abd, knee }).shin.y - tilt);
+        if (off < best) { best = off; leg = build({ ...def, abd, knee }); }
+      }
+    }
+    const { shinDir, knee, ankle, pads } = leg, push = V(Math.max(0, -leg.inner) * side, 0, 0);
+    return { side, hip: twist(hip), knee: twist(add(knee, push)), ankle: twist(add(ankle, push)), shinDir: twist(shinDir),
+      pads: pads.map(b => ({ ...b, center: twist(add(b.center, push)), u: twist(b.u), n: twist(b.n) })) };
   });
   let low = Infinity;
   for (const l of hung) {
@@ -298,7 +335,7 @@ export function solvePose(setup: PoseSetup, clamps: Clamps = DEFAULT_CLAMPS): Po
         const footT = V(side * p.foot[0] * H, footY, p.foot[1] * H);
         const knee = ikElbow(hip, footT, d.thigh, d.shank, V(side * p.pole[0], p.pole[1], p.pole[2]));
         const shinDir = norm(sub(footT, knee)), ankle = add(knee, mul(shinDir, d.shank));
-        leg = { side, hip, knee, ankle, shinDir, pads: padBoxes(d, hip, knee, ankle) };
+        leg = { side, hip, knee, ankle, shinDir, pads: padBoxes(d, knee, ankle) };
         footY -= Math.min(0, ...leg.pads.flatMap(b => boxCorners(b).map(c => c.y)));
       }
       return leg;
@@ -313,7 +350,8 @@ export function solvePose(setup: PoseSetup, clamps: Clamps = DEFAULT_CLAMPS): Po
   const postAnchor = boot ? V(boot.x, 0, boot.z) : null;
 
   const lean = st.lean * Math.PI / 180, sl = (st.sideLean || 0) * Math.PI / 180;
-  const torsoDir = norm(V((st.post || 0) * Math.sin(sl), Math.cos(lean), Math.sin(lean)));
+  // The torso leans from the hips, so its lean goes by the hips' frame (with RVH's square hips: along the goal line).
+  const torsoDir = norm(twist(V((st.post || 0) * Math.sin(sl), Math.cos(lean), Math.sin(lean))));
   const shoulderMid = add(pelvis, mul(torsoDir, d.torso));
   const lateral = norm(cross(torsoDir, FWD));                // toward the goalie's left
   const shoulders: Record<Side, Vec> = { 1: add(shoulderMid, mul(lateral, d.shoulderHalf)), [-1]: sub(shoulderMid, mul(lateral, d.shoulderHalf)) };
@@ -341,20 +379,24 @@ export function solvePose(setup: PoseSetup, clamps: Clamps = DEFAULT_CLAMPS): Po
   };
   const glove = hand('glove'), blocker = hand('blocker');
 
-  // Stick: straight shaft gripped gripDist up from the heel, turning with the blocker wrist. The neutral shaft (heel
-  // straight ahead of the hand) is turned by the wrist angles; the blade stays flat on the ice, so only the shaft's
-  // heading survives: the heel swings round the spot under the hand at the same distance, and the toe stays square to
-  // the shaft, toward the glove side.
-  const grip = blocker.wrist, gripDist = d.paddle.l + setup.gripAboveIn * IN;
-  const onIce = grip.y < gripDist, reachOnIce = onIce ? Math.sqrt(gripDist ** 2 - grip.y ** 2) : 0;
-  const turned = wristRotate(onIce ? norm(V(0, -grip.y, reachOnIce)) : FWD, blocker.side, blocker.rot);
-  const heading = Math.hypot(turned.x, turned.z) > 1e-3 ? norm(V(turned.x, 0, turned.z)) : FWD;
-  const heel = onIce ? add(V(grip.x, 0, grip.z), mul(heading, reachOnIce)) : V(grip.x, grip.y - gripDist, grip.z);
-  const stickDir = norm(sub(grip, heel));
-  const stick: Stick = { grip, heel, dir: stickDir, knob: add(heel, mul(stickDir, d.stickLen)), toeDir: mul(cross(UP, heading), gs),
-    headingDeg: Math.round(Math.atan2(heading.x, heading.z) * 180 / Math.PI),
-    gripDist, onIce, lift: onIce ? 0 : heel.y, bladeAhead: heel.z - grip.z,
-    shaftAngleDeg: Math.asin(clamp(stickDir.y, -1, 1)) * 180 / Math.PI };
+  // Stick: a flat, rigid piece. The blade lies on the ice with its toe toward the glove side, and the shaft leaves it
+  // at the stick's lie (STICK_LIE_DEG, between the shaft and the blade line behind the heel), so from the front the
+  // stick runs from the blade up and out to the blocker, and on past it away from the body. The blocker wrist's yaw
+  // turns the whole stick about the vertical (face turned out = toe swung forward). The hand's height sets how far the
+  // stick leans back toward the goalie: a low hand lays it down, and a hand too high for the lie lifts the blade.
+  const grip = blocker.wrist, gripDist = d.paddle.l + setup.gripAboveIn * IN, lie = STICK_LIE_DEG * RAD;
+  const yaw = (v: Vec) => ry(v, blocker.side * blocker.rot.yaw * RAD);
+  const toe = yaw(V(gs, 0, 0)), back = yaw(V(0, 0, -1));
+  // The shaft runs half a paddle width in from the heel, so the grip is gripDist up the shaft from a point that far
+  // across the paddle: reach is how far up the stick, measured along the shaft, the hand is from the ice.
+  const reach = gripDist + 0.5 * d.paddle.w / Math.tan(lie);
+  const tilt = Math.acos(clamp(grip.y / (reach * Math.sin(lie)), 0, 1));
+  const shaftDir = add(mul(toe, -Math.cos(lie)), mul(add(mul(UP, Math.cos(tilt)), mul(back, Math.sin(tilt))), Math.sin(lie)));
+  const across = norm(add(toe, mul(shaftDir, Math.cos(lie))));      // in the stick's plane, square to the shaft, toward the toe
+  const heel = sub(sub(grip, mul(shaftDir, gripDist)), mul(across, 0.5 * d.paddle.w));
+  const face = norm(cross(toe, shaftDir)), faceOut = dot(face, back) > 0 ? mul(face, -1) : face;
+  const stick: Stick = { grip, heel, dir: shaftDir, across, toeDir: toe, face: faceOut,
+    knob: add(heel, add(mul(across, 0.5 * d.paddle.w), mul(shaftDir, d.stickLen))), onIce: heel.y < 1e-3, lift: Math.max(0, heel.y) };
 
   return { dims: d, pelvis, torsoDir, shoulderMid, shoulders, head, legs, glove, blocker, stick, postAnchor };
 }
