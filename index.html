@@ -33,15 +33,21 @@
       <button type="button" id="cardToggle" aria-expanded="true" aria-label="Hide these controls"></button>
       <div data-panel="none">
         <b class="title"><span class="mouse">Click</span><span class="touch">Tap</span> something to change it</b>
-        <div class="hint">The <b>Puck</b> (orange ring), the <b>goalie</b>'s body, or a <b>hand</b>
+        <div class="hint">The <b>Puck</b> (orange ring) for the shooter, the <b>goalie</b>'s body, or a <b>hand</b>
           (the glove, or the blocker and stick). Drag the goalie or the Puck on the ice. Drag empty space to look
           around<span class="touch">, pinch to zoom</span>.</div>
       </div>
       <div data-panel="puck">
-        <b class="title">Puck</b>
-        <div class="hint">Drag it on the ice by its orange ring. In Puck's view, drag it on the map instead. Or jump to a spot:</div>
+        <b class="title">Shooter</b>
+        <div class="hint">The shooter carries the Puck. Drag it on the ice by its orange ring; in Puck's and Shooter's
+          views, drag it on the map instead. Or jump to a spot:</div>
         <div class="btns wrap" data-puck-spots></div>
         <div class="row"><button type="button" data-sweep>▶ Sweep across the slot</button></div>
+        <div class="row"><label>Shoots</label><span class="btns">
+          <button type="button" data-shoots="left">Left</button><button type="button" data-shoots="right">Right</button>
+        </span></div>
+        <div class="hint">Shooter's view looks from the shooter's eyes: beside the Puck, away from the stick, and as
+          tall as the goalie.</div>
       </div>
       <div data-panel="goalie" id="goaliePanel"></div>
       <div data-panel="hand">

@@ -4,6 +4,7 @@ import {
   boxCorners, defaultHands, feetWidthRangeIn, frontReach, placeAtPost, postFacing, STANCES,
   type HandTarget, type Pose, type PoseSetup, type StanceKey,
 } from './posing/posing';
+import { shooterSpot, type Shoots } from './shooter';
 
 /**
  * How the goalie is placed:
@@ -12,6 +13,9 @@ import {
  *  - free: wherever the coach put it.
  */
 export type Lock = 'arc' | 'post' | 'free';
+
+/** What the goalie squares up to as the Puck moves: nothing, the Puck, or the shooter's eyes. */
+export type Follow = 'off' | 'puck' | 'shooter';
 
 /** Everything about the goalie the coach can change. */
 export interface GoalieSetup extends PoseSetup {
@@ -22,8 +26,7 @@ export interface GoalieSetup extends PoseSetup {
   arcR: number;
   /** Where the goalie's root is on the ice. Kept up to date by placeGoalie; it is the setting when lock is free. */
   pos: { x: number; z: number };
-  /** Follow the Puck: square to it and on its angle. Read from links already; the feature comes in a later slice. */
-  follow: boolean;
+  follow: Follow;
 }
 
 // Settings move in the steps the Setup link stores them in (whole inches, whole degrees, centimetres, thousandths of
@@ -151,12 +154,14 @@ export function placeGoalie(g: GoalieSetup, pose: Pose): { x: number; z: number;
 }
 
 /**
- * Follow the Puck: square to the Puck and on its angle. On the arc that's just facing it (the arc does the rest);
- * placed freely, the goalie keeps its distance and slides round onto the Puck's angle. A post Stance at the post stays put.
+ * Follow: square to the Puck (or the shooter's eyes) and on its angle. On the arc that's just facing it (the arc does
+ * the rest); placed freely, the goalie keeps its distance and slides round onto the angle. A post Stance at the post
+ * stays put.
  */
-export function applyFollow(g: GoalieSetup, puck: { x: number; z: number }) {
-  if (!g.follow || g.lock === 'post') return;
-  g.facingDeg = Math.round(clamp(Math.atan2(puck.x, Math.max(puck.z, 0.05)) * DEG, -80, 80));
+export function applyFollow(g: GoalieSetup, puck: { x: number; z: number }, shoots: Shoots) {
+  if (g.follow === 'off' || g.lock === 'post') return;
+  const t = g.follow === 'shooter' ? shooterSpot(puck, shoots) : puck;
+  g.facingDeg = Math.round(clamp(Math.atan2(t.x, Math.max(t.z, 0.05)) * DEG, -80, 80));
   if (g.lock === 'free') {
     const r = Math.hypot(g.pos.x, g.pos.z), f = g.facingDeg / DEG;
     g.pos = { x: cm(r * Math.sin(f)), z: cm(r * Math.cos(f)) };

@@ -1,7 +1,7 @@
 import { IN } from '../dims';
 import {
   DEPTH_MAX_IN, DEPTH_MIN_IN, DEPTH_SPOTS, depthText, heightText, HEIGHT_MAX_IN, HEIGHT_MIN_IN,
-  type DepthSpot, type GoalieSetup,
+  type DepthSpot, type Follow, type GoalieSetup,
 } from '../goalie';
 import { feetWidthRangeIn, STANCE_KEYS, STANCES, type CatchSide, type StanceKey } from '../posing/posing';
 import { wheelNotches } from './wheel';
@@ -13,7 +13,7 @@ export interface GoalieCardActions {
   depthSpot(k: DepthSpot): void;
   post(): void;
   depthIn(inches: number): void;
-  follow(on: boolean): void;
+  follow(f: Follow): void;
   flarePct(pct: number): void;
   feetWidthIn(inches: number): void;
 }
@@ -60,12 +60,13 @@ export function goalieCard(el: HTMLElement, act: GoalieCardActions) {
     </div>
     <div class="hint">Depth is how far the toes are out from the middle of the goal line.
       − / + <span class="mouse">and the mouse wheel (over a slider, or anywhere while the goalie is selected) </span>move 1 inch.</div>
-    <div class="row"><label></label>
-      <label class="check"><input type="checkbox" data-follow> Follow the Puck (square to it and on its angle)</label>
-    </div>`;
+    <div class="row"><label>Follow</label><span class="btns">
+      <button type="button" data-follow="off">Off</button><button type="button" data-follow="puck">Puck</button>
+      <button type="button" data-follow="shooter">Shooter</button>
+    </span></div>
+    <div class="hint">Follow keeps the goalie square and on the angle as the Puck moves: to the Puck, or to the
+      shooter's eyes.</div>`;
   const height = el.querySelector<HTMLInputElement>('#heightIn')!, depth = el.querySelector<HTMLInputElement>('#depthIn')!;
-  const follow = el.querySelector<HTMLInputElement>('[data-follow]')!;
-  follow.addEventListener('change', () => act.follow(follow.checked));
   const flare = el.querySelector<HTMLInputElement>('#flarePct')!, feet = el.querySelector<HTMLInputElement>('#feetIn')!;
   flare.addEventListener('input', () => act.flarePct(Number(flare.value)));
   feet.addEventListener('input', () => act.feetWidthIn(Number(feet.value)));
@@ -78,7 +79,8 @@ export function goalieCard(el: HTMLElement, act: GoalieCardActions) {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('button');
     if (!b || !current) return;
     const d = b.dataset;
-    if (d.stance) act.stance(d.stance as StanceKey);
+    if (d.follow) act.follow(d.follow as Follow);
+    else if (d.stance) act.stance(d.stance as StanceKey);
     else if (d.catch) act.catchSide(d.catch as CatchSide);
     else if (d.height) act.heightIn(heightNow() + Number(d.height));
     else if (d.flare) act.flarePct(flarePctNow() + Number(d.flare));
@@ -129,8 +131,10 @@ export function goalieCard(el: HTMLElement, act: GoalieCardActions) {
       if (document.activeElement !== feet) feet.value = String(feetNowIn());
       // What the pose holds, which can be half an inch off what was asked once the pads push the knees apart.
       el.querySelector('[data-feet-val]')!.textContent = `${Math.round(feetM / IN)}″ (${feetM.toFixed(2)} m)`;
-      follow.checked = g.follow && g.lock !== 'post';
-      follow.disabled = g.lock === 'post';
+      el.querySelectorAll<HTMLButtonElement>('[data-follow]').forEach(b => {
+        b.classList.toggle('on', g.lock !== 'post' && b.dataset.follow === g.follow);
+        b.disabled = g.lock === 'post';
+      });
     },
   };
 }

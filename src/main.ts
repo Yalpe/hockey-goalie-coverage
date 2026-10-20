@@ -22,6 +22,7 @@ import { coverageCard } from './ui/coverageCard';
 import { goalieCard } from './ui/goalieCard';
 import { wheelNotches } from './ui/wheel';
 import { BadLink, decodeSetup, defaultSetup, encodeSetup, NAME_MAX, type Setup } from './setup';
+import type { Shoots } from './shooter';
 import { VIEWS, viewPose, type ViewKey } from './views';
 
 const $ = <T extends Element = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
@@ -63,6 +64,7 @@ let setupName = opened.setup.name;
 type Selection = 'puck' | 'goalie' | HandKey | null;
 let sel: Selection = null;
 let currentView: ViewKey = opened.setup.view;
+let shoots: Shoots = opened.setup.shoots;
 let pose: Pose;
 let hulls: Hull[] = [];
 let cov: Coverage;
@@ -122,11 +124,11 @@ const labels = holeLabels($('#labels'));
 const gCard = goalieCard($('#goaliePanel'), {
   stance: k => { setStance(goalie, k); updatePose(); },
   catchSide: c => { goalie.catchSide = c; updatePose(); },
-  heightIn: n => { setHeightIn(goalie, n); updatePose(); },
+  heightIn: n => { setHeightIn(goalie, n); updatePose(); if (currentView === 'shooter') setView('shooter'); },
   depthSpot: k => { setDepth(goalie, DEPTH_SPOTS[k]); updatePlacement(); },
   post: () => { lockToPost(goalie); updatePlacement(); },
   depthIn: n => { if (goalie.lock !== 'post') { setDepth(goalie, n * IN); updatePlacement(); } },
-  follow: on => { goalie.follow = on; updatePlacement(); },
+  follow: f => { goalie.follow = f; updatePlacement(); },
   flarePct: n => { setFlarePct(goalie, n); updatePose(); },
   feetWidthIn: n => { setFeetWidthIn(goalie, n); updatePose(); },
 });
@@ -145,7 +147,7 @@ $('[data-reset-hand]').addEventListener('click', () => {
   updatePose();
 });
 const map = cornerMap($<SVGSVGElement>('#cornerMap'), {
-  grab: () => stopSweep(),
+  grab: k => { stopSweep(); if (k === 'puck') select('puck'); },   // in Shooter's view the map is the way to the Puck
   puck: (x, z) => setPuck(x, z, true),
   goalie: p => dragGoalieTo(p),
   turn: (p, pivot) => turnGoalieToward(p, pivot),
@@ -157,7 +159,13 @@ function renderCard() {
   if (sel === 'goalie') gCard.render(goalie, depthNow(goalie, pose), Math.abs(pose.legs[0].ankle.x - pose.legs[1].ankle.x));
   $('[data-hand-title]').textContent = sel === 'glove' ? 'Glove Hand' : 'Blocker Hand (and stick)';
   document.querySelectorAll<HTMLElement>('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === gizmo.mode));
+  document.querySelectorAll<HTMLElement>('[data-shoots]').forEach(b => b.classList.toggle('on', b.dataset.shoots === shoots));
 }
+document.querySelectorAll<HTMLElement>('[data-shoots]').forEach(b => b.addEventListener('click', () => {
+  shoots = b.dataset.shoots as Shoots;
+  updatePlacement();   // a goalie following the shooter turns with the eyes
+  if (currentView === 'shooter') setView('shooter');
+}));
 
 const isHand = (k: Selection): k is HandKey => k === 'glove' || k === 'blocker';
 
@@ -201,7 +209,7 @@ function updatePose(keepHands = false) {
 
 /** The goalie moved or turned on the ice. Its pose and hulls stay as they are. */
 function updatePlacement() {
-  applyFollow(goalie, puck);
+  applyFollow(goalie, puck, shoots);
   const at = placeGoalie(goalie, pose);
   goalieRoot.position.set(at.x, 0, at.z);
   goalieRoot.rotation.y = at.facingDeg / DEG;
@@ -229,15 +237,15 @@ function updateCoverage() {
 function setPuck(x: number, z: number, refollow: boolean) {
   Object.assign(puck, clampPuck(x, z));
   puckMesh.group.position.set(puck.x, 0, puck.z);
-  if (goalie.follow) updatePlacement(); else updateCoverage();   // a following goalie squares up to the Puck
+  if (goalie.follow !== 'off') updatePlacement(); else updateCoverage();   // a following goalie squares up to the Puck
   if (refollow) refollowView();
 }
 
-// Moving or turning the goalie by hand: from the 3D view or the corner map. Either one switches Follow the Puck off.
+// Moving or turning the goalie by hand: from the 3D view or the corner map. Either one switches Follow off.
 function followOff() {
-  if (!goalie.follow) return;
-  goalie.follow = false;
-  flash('Follow the Puck: off');
+  if (goalie.follow === 'off') return;
+  goalie.follow = 'off';
+  flash('Follow: off');
 }
 function dragGoalieTo(p: { x: number; z: number }) {
   followOff();
@@ -287,7 +295,7 @@ function sweepStep(now: number) {
 }
 
 function renderMap() {
-  if (currentView === 'puck') map.render({ puck, goalie: { ...goalie.pos, facingDeg: goalie.facingDeg }, noShot: cov.noShot });
+  if (currentView === 'puck' || currentView === 'shooter') map.render({ puck, goalie: { ...goalie.pos, facingDeg: goalie.facingDeg }, noShot: cov.noShot });
 }
 
 // ---------------- views ----------------
@@ -310,7 +318,7 @@ viewbar.addEventListener('change', e => {
 
 function setView(k: ViewKey) {
   currentView = k;
-  const v = viewPose(k, puck, camera.aspect);
+  const v = viewPose(k, puck, camera.aspect, { shoots, heightM: goalie.heightM });
   camera.position.copy(v.pos);
   orbit.target.copy(v.target);
   camera.fov = v.fov;
@@ -327,7 +335,7 @@ function renderViewState() {
   const puckView = currentView === 'puck';
   puckMesh.ring.visible = !puckView;   // up close in Puck's view the ring would fill the screen; the map moves the Puck there
   $('#youArePuck').style.display = puckView ? 'block' : 'none';
-  $('#mapBox').style.display = puckView ? '' : 'none';
+  $('#mapBox').style.display = puckView || currentView === 'shooter' ? '' : 'none';   // the Puck is out of the picture
   coverageLayer.lanesVisible = show.cone && !puckView;   // from behind the Puck, the lanes would fill the screen
   viewbar.querySelectorAll<HTMLInputElement>('[data-show]').forEach(i => i.checked = show[i.dataset.show as keyof typeof show]);
   if (cov) { renderMap(); scheduleSave(); }
@@ -446,7 +454,7 @@ function flash(msg: string, ms = 1600) {
 
 // ---------------- Setup link ----------------
 // The address bar always holds the Setup on screen: #v1.<...>, updated a moment after the coach stops editing.
-const currentSetup = (): Setup => ({ name: setupName, goalie, puck, view: currentView, show });
+const currentSetup = (): Setup => ({ name: setupName, goalie, puck, view: currentView, shoots, show });
 let saveTimer: number | undefined;
 function saveNow() {
   clearTimeout(saveTimer);
@@ -503,6 +511,7 @@ function applySetup(s: Setup) {
   puckMesh.group.position.set(puck.x, 0, puck.z);
   Object.assign(goalie, s.goalie);
   Object.assign(show, s.show);
+  shoots = s.shoots;
   setupName = s.name;
   renderName();
   select(null);

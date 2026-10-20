@@ -65,6 +65,14 @@ _Avoid_: Distance, gap
 
 ## Coaching
 
+**Follow**:
+What the goaltender squares up to as the Puck moves: the Puck, the shooter's eyes (see Shoots), or nothing (Off). Moving or turning the goaltender by hand switches it off.
+_Avoid_: Track, auto-angle
+
 **Setup**:
-An arrangement of Puck and goaltender (position, facing, Stance, height, Catch Side, hand placement), with an optional name, the view and the display toggles, that a coach can save and share as a link.
+An arrangement of Puck and goaltender (position, facing, Stance, height, Catch Side, hand placement), with an optional name, the view, which side the shooter Shoots and the display toggles, that a coach can save and share as a link.
 _Avoid_: Scenario, preset, drill
+
+**Shoots**:
+Which side the shooter carries the Puck on, left or right. In Shooter's view the eyes sit about 30 cm to the other side of the Puck: shooters release close to the feet. The shooter is as tall as the goaltender, a player of the same age.
+_Avoid_: Handedness

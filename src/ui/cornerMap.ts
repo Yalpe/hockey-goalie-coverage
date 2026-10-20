@@ -12,8 +12,8 @@ export interface MapState {
 }
 
 export interface MapActions {
-  /** Something on the map was grabbed. */
-  grab(): void;
+  /** Something on the map was grabbed: the Puck, the goalie, or the goalie's turn knob. */
+  grab(k: 'puck' | 'goalie' | 'turn'): void;
   puck(x: number, z: number): void;
   /** Move the goalie's root to p. */
   goalie(p: XZ): void;
@@ -39,7 +39,7 @@ export function cornerMap(svg: SVGSVGElement, act: MapActions) {
     if (!k || !last) return;
     e.preventDefault();
     svg.setPointerCapture(e.pointerId);
-    act.grab();
+    act.grab(k as 'puck' | 'goalie' | 'turn');
     const p = pt(e), g = last.goalie;
     drag = k === 'puck' ? { k } : k === 'goalie' ? { k, off: { x: g.x - p.x, z: g.z - p.z } } : { k: 'turn', pivot: { x: g.x, z: g.z } };
   });

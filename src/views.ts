@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CREASE_RADIUS, MOUTH_H, NET_BASE_DEPTH, NET_BASE_HALF_W, PUCK_HALF_T } from './dims';
 import { POST_H, POST_X } from './scene/net';
 import type { PuckSpot } from './scene/puck';
+import { shooterSpot, type Shooter } from './shooter';
 
 export type ViewKey = 'puck' | 'shooter' | 'top' | 'behind' | 'orbit';
 
@@ -19,29 +20,39 @@ const DEG = 180 / Math.PI;
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 
+/** Half the vertical field of view, in degrees, that a camera at pos looking at target needs to fit each point times
+ * its margin. */
+function halfFov(pos: THREE.Vector3, target: THREE.Vector3, aspect: number, pts: [THREE.Vector3, number][]): number {
+  const look = target.clone().sub(pos).normalize();
+  const right = new THREE.Vector3().crossVectors(look, v(0, 1, 0)).normalize();
+  const up = new THREE.Vector3().crossVectors(right, look);
+  return Math.max(...pts.map(([p, margin]) => {
+    const r = p.clone().sub(pos), z = Math.max(r.dot(look), 0.05);
+    return Math.max(Math.atan(Math.abs(r.dot(up)) / z), Math.atan(Math.abs(r.dot(right)) / z / aspect)) * DEG * margin;
+  }));
+}
+const netCorners = (margin: number) =>
+  [[-POST_X, POST_H], [POST_X, POST_H], [-POST_X, 0], [POST_X, 0]].map(([x, y]): [THREE.Vector3, number] => [v(x, y, 0), margin]);
+
 /** Where the camera sits for a view preset. Every preset follows the Puck except Free orbit. */
-export function viewPose(k: ViewKey, puck: PuckSpot, aspect: number): ViewPose {
+export function viewPose(k: ViewKey, puck: PuckSpot, aspect: number, shooter: Shooter): ViewPose {
   const d = Math.hypot(puck.x, puck.z) || 1, ux = puck.x / d, uz = puck.z / d;
   switch (k) {
     case 'puck': {
       // 1.4 m behind and 25 cm above the Puck, on its line to the net, zoomed so the Puck sits at the bottom of the
       // picture with the whole net above it.
       const pos = v(puck.x + ux * 1.4, PUCK_HALF_T + 0.25, puck.z + uz * 1.4), target = v(0, MOUTH_H / 2, 0);
-      const look = target.clone().sub(pos).normalize();
-      const right = new THREE.Vector3().crossVectors(look, v(0, 1, 0)).normalize();
-      const up = new THREE.Vector3().crossVectors(right, look);
-      // Half the vertical field of view needed to fit p, with some margin.
-      const half = (p: THREE.Vector3, margin: number) => {
-        const r = p.clone().sub(pos), z = Math.max(r.dot(look), 0.05);
-        return Math.max(Math.atan(Math.abs(r.dot(up)) / z), Math.atan(Math.abs(r.dot(right)) / z / aspect)) * DEG * margin;
-      };
-      const corners = [[-POST_X, POST_H], [POST_X, POST_H], [-POST_X, 0], [POST_X, 0]].map(([x, y]) => half(v(x, y, 0), 1.15));
-      const need = Math.max(half(v(puck.x, 0, puck.z), 1.35), ...corners);
+      const need = halfFov(pos, target, aspect, [[v(puck.x, 0, puck.z), 1.35], ...netCorners(1.15)]);
       return { pos, target, fov: clamp(2 * need, 20, 100) };
     }
-    case 'shooter':
-      // Far enough back, and aimed low enough, that the Puck stays in the bottom of the picture.
-      return { pos: v(puck.x + ux * 3, 1.3, puck.z + uz * 3), target: v(puck.x * 0.3, 0.45, puck.z * 0.3), fov: 44 };
+    case 'shooter': {
+      // The shooter's own eyes, looking at the net, crouched over the shot at 0.74 of the shooter's height (1.3 m for a
+      // 5'9" player). The Puck is below the picture, as it is for a shooter looking up at the net. A natural field of
+      // view, widened only when the net would not fit.
+      const eyes = shooterSpot(puck, shooter.shoots);
+      const pos = v(eyes.x, 0.74 * shooter.heightM, eyes.z), target = v(0, MOUTH_H / 2, 0);
+      return { pos, target, fov: clamp(2 * halfFov(pos, target, aspect, netCorners(1.3)), 50, 100) };
+    }
     case 'top': {
       // Straight down, high enough to fit the whole net, the crease (where the goalie is) and the Puck with a margin.
       // The net sits at the top of the picture and the Puck below it.

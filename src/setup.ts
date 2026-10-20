@@ -4,9 +4,10 @@
 // always means the same thing, even if the app's defaults change later. Never edit them; add a v2 instead.
 import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
 import { IN } from './dims';
-import type { GoalieSetup } from './goalie';
+import type { Follow, GoalieSetup } from './goalie';
 import type { CatchSide, HandKey, HandTarget, StanceKey } from './posing/posing';
 import type { PuckSpot } from './scene/puck';
+import type { Shoots } from './shooter';
 import type { ViewKey } from './views';
 
 export interface Setup {
@@ -14,6 +15,8 @@ export interface Setup {
   goalie: GoalieSetup;
   puck: PuckSpot;
   view: ViewKey;
+  /** The shooter's hand, for Shooter's view. */
+  shoots: Shoots;
   show: { cone: boolean };
 }
 
@@ -26,12 +29,13 @@ const STANCE_CODES: Record<StanceKey, string> = {
   standup: 'su', butterfly: 'bf', rvhL: 'rl', rvhR: 'rr', overlapL: 'ol', overlapR: 'or',
 };
 const VIEW_CODES: Record<ViewKey, string> = { puck: 'p', shooter: 's', top: 't', behind: 'b', orbit: 'o' };
+const FOLLOW_CODES: Follow[] = ['off', 'puck', 'shooter'];   // 'fo': its index
 const RVH_POST: Partial<Record<StanceKey, 1 | -1>> = { rvhL: 1, rvhR: -1 };
 // gripAboveIn: the blocker hand's grip, up the shaft from the paddle's top. The fist sits right on the shoulder, the
 // index finger along the paddle (a grip photo), so its middle is about an inch up. Not stored in links.
 const V1 = {
   stance: 'butterfly' as StanceKey, heightIn: 69, catchSide: 'left' as CatchSide,
-  depthIn: 72, facingDeg: 0, puckCm: { x: 0, z: 600 }, view: 'puck' as ViewKey, cone: true,
+  depthIn: 72, facingDeg: 0, puckCm: { x: 0, z: 600 }, view: 'puck' as ViewKey, cone: true, shoots: 'left' as Shoots,
   gripAboveIn: 1, rvhTurnDeg: 30, overlapTurnDeg: 60,
 };
 /** Which way each post Stance faces at its post, by default. */
@@ -75,7 +79,7 @@ export function encodeSetup(s: Setup): string {
     else put('d', Math.round(g.arcR / IN), V1.depthIn);
     put('f', Math.round(g.facingDeg), V1.facingDeg);
   }
-  put('fo', g.follow ? 1 : 0, 0);
+  put('fo', FOLLOW_CODES.indexOf(g.follow), 0);
   put('fl', Math.round((g.flare ?? 0) * 100), 0);   // Flare, in whole percent
   if (g.feetWidthIn) o.fw = g.feetWidthIn;           // stand-up Feet width in inches; left out for the usual stance
   const def = v1Hands(g.stance, g.catchSide);
@@ -90,6 +94,7 @@ export function encodeSetup(s: Setup): string {
   put('px', Math.round(s.puck.x * 100), V1.puckCm.x);
   put('pz', Math.round(s.puck.z * 100), V1.puckCm.z);
   put('v', VIEW_CODES[s.view], VIEW_CODES[V1.view]);
+  put('sh', s.shoots === 'left' ? 'l' : 'r', 'l');
   put('tc', s.show.cone ? 1 : 0, 1);
   return 'v1.' + compressToEncodedURIComponent(JSON.stringify(o));
 }
@@ -159,11 +164,12 @@ function decodeV1(o: Record<string, unknown>): Setup {
     name,
     goalie: {
       stance, catchSide, heightM, gripAboveIn: V1.gripAboveIn, ...hands,
-      facingDeg, lock, arcR, pos, follow: int('fo', 0, 0, 1) === 1,
+      facingDeg, lock, arcR, pos, follow: FOLLOW_CODES[int('fo', 0, 0, FOLLOW_CODES.length - 1)],
       flare: int('fl', 0, 0, 100) / 100, feetWidthIn: o.fw === undefined ? undefined : int('fw', 0, 8, 60),
     },
     puck: { x: int('px', V1.puckCm.x, -2000, 2000) / 100, z: int('pz', V1.puckCm.z, -500, 3000) / 100 },
     view: code('v', VIEW_CODES, V1.view),
+    shoots: code('sh', { left: 'l', right: 'r' }, V1.shoots),
     show: { cone: int('tc', 1, 0, 1) === 1 },   // older links may hold 'tm', the retired Puck-size margin toggle
   };
 }

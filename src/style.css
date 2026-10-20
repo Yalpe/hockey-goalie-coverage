@@ -186,8 +186,6 @@ kbd {
   #noShot { top: 128px; }
   #flash { top: 160px; }
 }
-#card label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; color: var(--ink); min-width: 0; }
-#card label.check input { accent-color: var(--accent); margin: 0; }
 #card .btns.wrap { margin-top: 4px; }
 #card .row > label:first-child small { display: block; font-size: 11px; line-height: 1.1; color: #94a3b8; }
 
@@ -206,7 +204,7 @@ kbd {
   .card button.step { min-width: 36px; padding: 6px 10px; }
   .card input[type=range] { height: 32px; }
   #viewbar .toggles { padding: 7px 10px; }
-  #viewbar .toggles input, #card label.check input { width: 18px; height: 18px; }
+  #viewbar .toggles input { width: 18px; height: 18px; }
 }
 
 /* Small or short screens: a compact "% covered" card, and a selection card that scrolls and folds away */
