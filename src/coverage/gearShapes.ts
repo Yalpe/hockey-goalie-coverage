@@ -1,11 +1,12 @@
 // The goalie's gear as convex hulls shaped like the real thing: leg pads with a boot and a knee roll, a catching glove
-// with a cuff, a blocker board with the hand behind it, and a stick with a tapered paddle and a rounded toe. One hull per
+// with a cuff, a blocker board with the hand behind it, and the stick (its shape is in stickShape.ts). One hull per
 // piece keeps the coverage cheap. Chosen over the boxes and over a many-piece build in the gear-shapes prototype (branch
 // prototype/gear-shapes). Sizes still come from goalieDims. The pad hulls stay inside the posing module's pad boxes
 // (which placement, frontReach and the post, still go by), but for the boot, which reaches over the skate toe.
 import { skateAxes, type Hand, type Leg, type Pose } from '../posing/posing';
 import { add, cross, dot, mul, norm, sub, type Vec } from '../posing/vec';
 import type { Part, PartMat } from './parts';
+import { stickFrame, stickShape } from './stickShape';
 
 /** A local frame: origin and three axes. */
 interface Frame { o: Vec; x: Vec; y: Vec; z: Vec }
@@ -39,7 +40,7 @@ const hull = (id: string, mat: PartMat, pts: Vec[]): Part => ({ id, kind: 'hull'
 // from the ankle up past the knee (the knee block bulges out the back there) into the thigh rise, which carries straight
 // on and thins to its top. At the ankle the pad bends: the boot runs forward along the foot, the same thickness, down
 // over the skate to just past its toe. Two hulls, so the bend stays. Shin frame: origin at the posing box's centre,
-// x across, y up the shin, z out of the face (the shin 4 cm in front of the back); the boot's toe end is in the
+// x across, y up the shin, z out of the face (the shin PAD_BACK, 4 cm at 5′9″, in front of the back); the boot's toe end is in the
 // skate's frame.
 function pads(pose: Pose, out: Part[]) {
   const L = 0.152 * pose.dims.H, toe = 0.7 * L;
@@ -94,20 +95,15 @@ function blocker(pose: Pose, out: Part[]) {
   out.push(hull('blockerHand', 'trim', [...ring(f, -0.32 * L, -0.28 * W, 0.28 * W, -0.11, -0.025, 0.02), ...ring(f, 0.2 * L, -0.28 * W, 0.28 * W, -0.11, -0.025, 0.02)]));
 }
 
-// Stick. Frames from the heel on the ice, z out of the stick's front face. Paddle and shaft: y up the shaft, x across
-// it toward the toe. Blade: x along the blade to the toe, flat on the ice, y up the blade (the shaft leaves it at the lie).
+// Stick: one hull per convex piece of its shape (stickShape.ts), each piece's outline at the stick's thickness there,
+// on the blade's curve. The stick model draws the same outline, so it stays inside these.
 function stick(pose: Pose, out: Part[]) {
-  const d = pose.dims, s = pose.stick, pl = d.paddle.l, pw = d.paddle.w, bl = d.blade.l, bh = d.blade.h;
-  const f: Frame = { o: s.heel, x: s.across, y: s.dir, z: s.face };
-  const fb: Frame = { o: s.heel, x: s.toeDir, y: norm(sub(s.dir, mul(s.toeDir, dot(s.dir, s.toeDir)))), z: s.face };
-  // Paddle: its back edge on the heel, tapering a little toward the shaft.
-  out.push(hull('paddle', 'stick', slab(f, [[0, 0.02], [pw, bh], [0.85 * pw, pl], [0.12 * pw, pl]], -0.012, 0.012, 0.15)));
-  // Shaft: about 1.1 × 1 in, with a knob at the top.
-  const sx0 = 0.5 * pw - 0.014, sx1 = 0.5 * pw + 0.014;
-  out.push(hull('shaft', 'stick', [...ring(f, pl - 0.02, sx0, sx1, -0.0125, 0.0125, 0.004), ...ring(f, d.stickLen - 0.03, sx0, sx1, -0.0125, 0.0125, 0.004)]));
-  out.push({ id: 'knob', kind: 'capsule', a: at(f, 0.5 * pw, d.stickLen - 0.03, 0), b: at(f, 0.5 * pw, d.stickLen, 0), r: 0.019, mat: 'stick' });
-  // Blade: square heel, rounded toe.
-  out.push(hull('blade', 'blade', slab(fb, [[0, 0], ...arc(bl - 0.45 * bh, 0.45 * bh, 0.45 * bh, 0.45 * bh, -90, 90, 5), [0, bh]], -0.008, 0.008)));
+  const shape = stickShape(pose.dims), f = stickFrame(pose.stick);
+  for (const pc of shape.pieces)
+    out.push(hull(pc.id, 'stick', pc.pts.flatMap(p => {
+      const t = shape.thick(p) / 2, z = shape.bend(p[0]);
+      return [at(f, p[0], p[1], z - t), at(f, p[0], p[1], z + t)];
+    })));
 }
 
 // Skates, under the ankle, toe pointing where the pad faces (the pad's toe is tied to it). Frame: origin at the bottom

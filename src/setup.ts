@@ -27,10 +27,12 @@ const STANCE_CODES: Record<StanceKey, string> = {
 };
 const VIEW_CODES: Record<ViewKey, string> = { puck: 'p', shooter: 's', top: 't', behind: 'b', orbit: 'o' };
 const RVH_POST: Partial<Record<StanceKey, 1 | -1>> = { rvhL: 1, rvhR: -1 };
+// gripAboveIn: the blocker hand's grip, up the shaft from the paddle's top. The fist sits right on the shoulder, the
+// index finger along the paddle (a grip photo), so its middle is about an inch up. Not stored in links.
 const V1 = {
   stance: 'butterfly' as StanceKey, heightIn: 69, catchSide: 'left' as CatchSide,
   depthIn: 72, facingDeg: 0, puckCm: { x: 0, z: 600 }, view: 'puck' as ViewKey, cone: true,
-  gripAboveIn: 3, rvhTurnDeg: 30, overlapTurnDeg: 60,
+  gripAboveIn: 1, rvhTurnDeg: 30, overlapTurnDeg: 60,
 };
 /** Which way each post Stance faces at its post, by default. */
 const POST_FACING: Partial<Record<StanceKey, number>> = {

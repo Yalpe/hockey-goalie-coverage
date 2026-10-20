@@ -145,7 +145,7 @@ Let `in = 0.0254` and `g = clamp(H / 1.83, 0.6, 1.0)`. The gear scale factor g r
 | Catching glove face | ellipse `g · (17.5 × 10.5 in)` = `g · (0.445 × 0.267 m)` | An ellipse of 17.5 × 10.5 in has a perimeter of about 44.7 in, so it fits the 45 in limit at the maximum. This is a modelling simplification, not a published shape |
 | Stick blade | 15.5 × 3.5 in at H ≥ 1.70, else × g | HC 3.3(c) |
 | Paddle (widened portion) | length `clamp(0.37·H/in, 18, 26)` in; width 3.5 in (3 in if g < 0.8) | Fits the SFS height bands; capped at the HC 26 in |
-| Stick overall | `min(1.40, 0.75H)` m | Capped at HC 55 in |
+| Stick overall | `min(1.40, 0.90H)` m | Cut at nose height (about halfway between chin 0.870 and eye 0.936, Winter), as a player's stick is: a coaching rule of thumb, since no youth or junior overall lengths were found published (2026-10-19). Capped at HC 55 in |
 | Chest/arm shell | torso box `shoulder width 0.259H + 2·0.05` m wide | Shoulder caps ≤ 1 in above shoulder (HC 3.5(d)) |
 
 Worked check (computed from the rules above):
@@ -203,7 +203,7 @@ Origin suggestion: ice level, at the midpoint of the goal line's *back* edge. Ho
 | PAD_TOP(H) | 0.395H + 0.1016 | | NHL 11.2 + Winter |
 | PAD_WIDTH(H) | clamp(0.155H, 0.20, 0.2794) | | proposed |
 | PADDLE_LEN(H) | clamp(0.37H/0.0254, 18, 26) in | | SFS fit, HC cap |
-| STICK_LEN(H) | min(1.397, 0.75H) | | proposed |
+| STICK_LEN(H) | min(1.397, 0.90H) | | nose height, rule of thumb |
 | SHOULDER_W / HIP_W | 0.259H / 0.191H | | Winter |
 | SHOULDER_H / HIP_H / KNEE_H (barefoot) | 0.818H / 0.530H / 0.285H | | Winter |
 | UPPER_ARM / FOREARM / HAND | 0.186H / 0.146H / 0.108H | | Winter |

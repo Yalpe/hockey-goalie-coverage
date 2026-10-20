@@ -45,7 +45,7 @@ export function goalieDims(H: number) {
     glove: { w: gear.glove.w * IN, h: gear.glove.h * IN },
     blade: { l: gear.blade.l * IN, h: gear.blade.w * IN },
     paddle: { l: gear.paddle * IN, w: gear.blade.w * IN },
-    stickLen: Math.min(1.397, 0.75 * H),
+    stickLen: Math.min(1.397, 0.9 * H),   // cut at nose height, like a player's stick; HC's 55 in at most
   };
 }
 
@@ -134,11 +134,11 @@ const RVH_POST_LEG = BUTTERFLY_LEG;
 const RVH_FAR_LEG: PlantedLeg = { plant: { foot: [0.45, 0.02], pole: [0.2, 0.5, 1] } };
 export const RVH_TURN_DEG = 30;   // body rotation toward the post
 const RVH_HIP_TURN_DEG = 30;      // the hips turned back from that, square to the net
-// Stick lie: the angle between the shaft and the blade line behind the heel, measured off a front photo of a stand-up
-// goalie with the blocker hand at the top of the thigh, just above the paddle: the shaft about 14° off vertical, the
-// stick standing nearly upright. (An earlier photo, hands much lower, gave 65°; it can't hold the blade down with the
-// hand near the hip.)
-const STICK_LIE_DEG = 75;
+// Stick lie: the angle between the shaft and the blade line behind the heel, measured off a product photo of a carbon
+// goalie stick laid flat (the paddle's edges against the blade's bottom): about 60°. (It was 75°, read off a stance
+// photo with the shaft about 14° off vertical, but a stick seen in a stance only shows its lie when the blade is flat
+// and the stick square to the camera.)
+export const STICK_LIE_DEG = 60;
 // Overlap: standing on the post, squared to a shooter driving wide, so turned well round toward the post.
 export const OVERLAP_TURN_DEG = 67;
 
@@ -234,16 +234,22 @@ export function defaultHands(body: BodySetup): Record<HandKey, HandTarget> {
 // centimetres under the hip, higher for a small goalie, whose paddle is long for its size). The glove is well above it.
 // Seen from the side, the paddle, the hands and the head make one line: the line through the head parallel to the
 // stick says how far forward each hand goes.
-const STICK_LEAN_DEG = 15, GLOVE_OVER_BLOCKER = 0.09;   // the glove: a fraction of H (16 cm at 5′9″)
+// The stick never stands upright, seen from the side: it leans back at least MIN_STICK_LEAN_DEG.
+const STICK_LEAN_DEG = 15, MIN_STICK_LEAN_DEG = 10, GLOVE_OVER_BLOCKER = 0.09;   // the glove: a fraction of H (16 cm at 5′9″)
+/** How high the blocker hand is when it holds the stick with its blade flat on the ice, leaning back by leanDeg seen
+ *  from the side (see the stick in solvePose): the higher the hand, the more upright the stick. */
+function stickTop(d: Dims, gripAboveIn: number, leanDeg: number): number {
+  const lie = STICK_LIE_DEG * RAD;
+  return (d.paddle.l + gripAboveIn * IN + 0.5 * d.paddle.w / Math.tan(lie)) * Math.sin(lie) * Math.cos(leanDeg * RAD);
+}
 function standupHands(body: BodySetup): Record<HandKey, HandTarget> {
-  const H = body.heightM, t = structuredClone(DEFAULT_TARGETS.standup), lie = STICK_LIE_DEG * RAD;
+  const H = body.heightM, t = structuredClone(DEFAULT_TARGETS.standup);
   let p = solvePose({ ...body, ...t });
-  const d = p.dims, top = (d.paddle.l + body.gripAboveIn * IN + 0.5 * d.paddle.w / Math.tan(lie)) * Math.sin(lie);
+  const d = p.dims, top = stickTop(d, body.gripAboveIn, MIN_STICK_LEAN_DEG);
   const reach = (d.upperArm + d.forearm) * 0.995;
-  // Seen from the side the stick leans back by its tilt, and the hand is top × cos(tilt) up (see the stick below).
   // If the line is out of arm's reach, raise the hands a centimetre at a time: the stick stands up and the line comes
-  // back toward the body.
-  for (let by = Math.min(top * Math.cos(STICK_LEAN_DEG * RAD), top - 0.005); ; by = Math.min(by + 0.01, top - 0.005)) {
+  // back toward the body, but only as far as the stick's least lean.
+  for (let by = Math.min(stickTop(d, body.gripAboveIn, STICK_LEAN_DEG), top - 0.005); ; by = Math.min(by + 0.01, top - 0.005)) {
     const gy = by + GLOVE_OVER_BLOCKER * H;
     // Targets are measured in the Stance's usual pose: add back how far Feet width has dropped the hips.
     t.blocker.up = (by + p.sink) / H; t.glove.up = (gy + p.sink) / H;
@@ -325,10 +331,13 @@ function bootEnd(d: Dims, knee: Vec, ankle: Vec): Vec {
   return sub(ankle, mul(norm(sub(knee, ankle)), d.ankleH - 0.01));
 }
 // The pad faces straight ahead, as far as its leg lets it.
+// The shin sits this far in front of the pad's back: 4 cm at 5′9″, in step with the goalie, so a small goalie's knee
+// (the thigh's 0.055 H round) stays inside the pad's front (which is 0.09 H − back in front of the shin).
+const PAD_BACK = 0.023;
 function padBoxes(d: Dims, knee: Vec, ankle: Vec): PadBox[] {
   const box = (from: Vec, dir: Vec, l: number, width: number, depth: number): PadBox => {
     const n = norm(sub(FWD, mul(dir, dot(FWD, dir))));
-    return { center: add(add(from, mul(dir, l / 2)), mul(n, depth / 2 - 0.04)), u: dir, n, len: l, width, depth };
+    return { center: add(add(from, mul(dir, l / 2)), mul(n, depth / 2 - PAD_BACK * d.H)), u: dir, n, len: l, width, depth };
   };
   const u = norm(sub(knee, ankle));                        // up the shin
   const bottom = bootEnd(d, knee, ankle);
@@ -514,6 +523,16 @@ export function solvePose(setup: PoseSetup, clamps: Clamps = DEFAULT_CLAMPS): Po
     // A hand settled at arm's reach and stored to a thousandth of height can land a hair past it, so allow 2 mm
     // (still inside the full arm length) before calling it held back.
     if (len(sub(wrist, shoulder)) > reach + 0.002) { wrist = add(shoulder, mul(norm(sub(wrist, shoulder)), reach)); flags.push('out of arm reach'); }
+    // Stand-up keeps the stick flat on the ice (in the middle of the five-hole, as the makers fit it) and leaning back
+    // at least MIN_STICK_LEAN_DEG: a blocker hand higher than that comes down to it, drawn in toward the shoulder if
+    // that would put it out of reach.
+    const top = which === 'blocker' && setup.stance === 'standup' ? stickTop(d, setup.gripAboveIn, MIN_STICK_LEAN_DEG) : Infinity;
+    if (wrist.y > top + 1e-6) {
+      const r = Math.sqrt(Math.max(0, reach * reach - (top - shoulder.y) ** 2)), hx = wrist.x - shoulder.x, hz = wrist.z - shoulder.z;
+      const k = Math.min(1, r / (Math.hypot(hx, hz) || 1));
+      wrist = V(shoulder.x + hx * k, top, shoulder.z + hz * k);
+      flags.push('too high to keep the blade down');
+    }
     const elbow = ikElbow(shoulder, wrist, d.upperArm, d.forearm, V(side * 0.8, -1, -0.4));
     const rot = { yaw: placed.yaw, pitch: placed.pitch, roll: placed.roll };
     return { side, requested: V(side * t.out * H, t.up * H - sink, t.fwd * H), wrist, elbow, shoulder, flags, rot,

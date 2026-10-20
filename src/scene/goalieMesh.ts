@@ -1,17 +1,20 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { partSig, type Part, type PartMat } from '../coverage/parts';
+import type { Pose } from '../posing/posing';
 import type { Vec } from '../posing/vec';
+import { createStickMesh } from './stickMesh';
 
 /**
- * The primitive goalie: one mesh per part, each named after its part id (thighL, shinR, padL0, chest, head,
- * gloveForearm, glove, blocker, paddle, shaft, blade…). The parts are built on the pose's named joints, so this module
- * is the only thing to replace with a rigged model later; nothing else draws the goalie.
+ * The goalie: one mesh per part, each named after its part id (thighL, shinR, padL0, chest, head, gloveForearm,
+ * glove, blocker…), but for the stick, a model of its own (stickMesh.ts, named stick) drawn from the same shape as its
+ * parts. The parts are built on the pose's named joints, so this module is the only thing to replace with a rigged
+ * model later; nothing else draws the goalie.
  */
 export interface GoalieMesh {
   /** Lives in the goalie's own frame: put it under a group placed and turned like the goalie. */
   group: THREE.Group;
-  update(parts: Part[]): void;
+  update(parts: Part[], pose: Pose): void;
 }
 
 const MATS: Record<PartMat, THREE.Material> = {
@@ -53,11 +56,15 @@ export function createGoalieMesh(): GoalieMesh {
   const group = new THREE.Group();
   group.name = 'goalie';
   const built = new Map<string, { sig: string; mesh: THREE.Mesh }>();
+  const stick = createStickMesh();
+  group.add(stick.mesh);
   return {
     group,
-    update(parts) {
+    update(parts, pose) {
+      stick.update(pose);
       const seen = new Set<string>();
       for (const p of parts) {
+        if (p.id.startsWith('stick')) continue;
         seen.add(p.id);
         const s = partSig(p), old = built.get(p.id);
         if (old?.sig === s) continue;

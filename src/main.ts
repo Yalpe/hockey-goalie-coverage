@@ -192,7 +192,7 @@ document.querySelectorAll<HTMLElement>('[data-mode]').forEach(b => b.addEventLis
 function updatePose(keepHands = false) {
   pose = solvePose(goalie);
   const parts = goalieParts(pose);
-  goalieMesh.update(parts);
+  goalieMesh.update(parts, pose);
   hulls = hullCache.hulls(parts);
   helpers.update(pose, keepHands);
   renderWarn();
@@ -359,7 +359,7 @@ function icePoint(): { x: number; z: number } | null {
 }
 // Which hand a part of the goalie belongs to (the stick goes with the blocker), or null for the body.
 const handOf = (id: string): HandKey | null =>
-  id.startsWith('glove') ? 'glove' : id.startsWith('blocker') || ['paddle', 'shaft', 'blade'].includes(id) ? 'blocker' : null;
+  id.startsWith('glove') ? 'glove' : id.startsWith('blocker') || id.startsWith('stick') ? 'blocker' : null;
 
 type Drag = { k: 'puck' } | { k: 'goalie'; off: { x: number; z: number } } | { k: 'turn'; pivot: { x: number; z: number } };
 let drag: Drag | null = null, downAt: { x: number; y: number } | null = null;
