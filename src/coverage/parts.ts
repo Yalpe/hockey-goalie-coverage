@@ -2,7 +2,7 @@
 // MODULE. The coverage dilates each part by the Puck; the goalie mesh draws the same parts, so what you see is what
 // covers the net.
 import type { Pose } from '../posing/posing';
-import { add, dot, FWD, len, mul, norm, sub, type Vec } from '../posing/vec';
+import { add, cross, dot, FWD, len, mul, norm, sub, type Vec } from '../posing/vec';
 import { gearParts } from './gearShapes';
 
 export type PartMat = 'body' | 'jersey' | 'pad' | 'glove' | 'blocker' | 'trim' | 'stick' | 'blade';
@@ -27,7 +27,9 @@ export function goalieParts(pose: Pose): Part[] {
   }
   const tn = norm(sub(FWD, mul(pose.torsoDir, dot(FWD, pose.torsoDir))));
   box('pelvis', add(pose.pelvis, mul(pose.torsoDir, 0.02 * H)), pose.torsoDir, tn, 0.24 * H, 0.1 * H, 0.14 * H, 'body');
-  box('chest', add(pose.pelvis, mul(pose.torsoDir, d.torso * 0.55)), pose.torsoDir, tn, 2 * d.shoulderHalf + 0.1, d.torso * 1.1, 0.15 * H, 'jersey');
+  // The chest turns with the shoulder line (RVH turns the shoulders toward the post); the pelvis stays with the hips.
+  const across = norm(sub(pose.shoulders[1], pose.shoulders[-1])), cn = norm(cross(across, pose.torsoDir));
+  box('chest', add(pose.pelvis, mul(pose.torsoDir, d.torso * 0.55)), pose.torsoDir, cn, 2 * d.shoulderHalf + 0.1, d.torso * 1.1, 0.15 * H, 'jersey');
   cap('head', pose.head, pose.head, 0.065 * H, 'body');
   for (const [w, h] of [['glove', pose.glove], ['blocker', pose.blocker]] as const) {
     cap(w + 'Shoulder', h.shoulder, h.shoulder, 0.05 * H, 'jersey');

@@ -3,7 +3,7 @@
 // piece keeps the coverage cheap. Chosen over the boxes and over a many-piece build in the gear-shapes prototype (branch
 // prototype/gear-shapes). Sizes still come from goalieDims. The pad hulls stay inside the posing module's pad boxes
 // (which placement, frontReach and the post, still go by), but for the boot, which reaches over the skate toe.
-import { skateAxes, type Hand, type Leg, type Pose } from '../posing/posing';
+import { SKATE_LIFT, skateAxes, type Hand, type Leg, type Pose } from '../posing/posing';
 import { add, cross, dot, mul, norm, sub, type Vec } from '../posing/vec';
 import type { Part, PartMat } from './parts';
 import { stickFrame, stickShape } from './stickShape';
@@ -111,7 +111,6 @@ function stick(pose: Pose, out: Part[]) {
 // frontReach) the skate leans with the shin onto its edge (skateAxes). On a kneeling leg the ankle stays square: the sole faces out along the
 // shin, just past the pad's boot, which covers the toe. The steel and holder lift the sole SKATE_LIFT (the lift in
 // ankleH); the boot runs from the sole up into the pad, toe at 0.7 of the foot.
-const SKATE_LIFT = 0.1016;
 function skateFrame(pose: Pose, l: Leg): Frame {
   if (l.shinDir.y < -0.5) {
     const { fwd, up } = skateAxes(l);
@@ -120,17 +119,21 @@ function skateFrame(pose: Pose, l: Leg): Frame {
   const n = l.pads[0].n, up = mul(l.shinDir, -1), fwd = norm(sub(n, mul(up, dot(n, up))));
   return { o: sub(l.ankle, mul(up, pose.dims.ankleH)), x: fwd, y: up, z: cross(fwd, up) };
 }
-function skates(pose: Pose, out: Part[]) {
+/** The skate's hulls in frame f: boot, holder and steel. RVH's post skate (the one kneeling leg at a post) stands as the
+ *  posing placed it (postFoot); the pad's boot keeps to skateFrame. */
+function skateHulls(pose: Pose, l: Leg, f: Frame): [Vec[], Vec[], Vec[]] {
   const L = 0.152 * pose.dims.H, heel = -0.3 * L, toe = 0.7 * L, sole = SKATE_LIFT;
+  return [[
+    ...ring(f, sole, heel, toe, -0.045, 0.045, 0.03),
+    ...ring(f, sole + 0.04, heel - 0.01, toe - 0.03, -0.05, 0.05, 0.03),
+    ...ring(f, dot(sub(l.ankle, f.o), f.y) + 0.03, heel + 0.01, 0.2 * L, -0.045, 0.045, 0.03),
+  ], slab(f, [[heel + 0.02, 0.03], [toe - 0.03, 0.03], [toe - 0.05, sole], [heel + 0.01, sole]], -0.012, 0.012),
+  slab(f, [[heel + 0.01, 0.03], [heel + 0.02, 0.004], [toe - 0.06, 0], [toe - 0.025, 0.012], [toe - 0.02, 0.03]], -0.002, 0.002)];
+}
+function skates(pose: Pose, out: Part[]) {
   for (const l of pose.legs) {
-    const f = skateFrame(pose, l), s = l.side > 0 ? 'L' : 'R';
-    out.push(hull(`skate${s}`, 'blade', [
-      ...ring(f, sole, heel, toe, -0.045, 0.045, 0.03),
-      ...ring(f, sole + 0.04, heel - 0.01, toe - 0.03, -0.05, 0.05, 0.03),
-      ...ring(f, dot(sub(l.ankle, f.o), f.y) + 0.03, heel + 0.01, 0.2 * L, -0.045, 0.045, 0.03),
-    ]));
-    out.push(hull(`skateHolder${s}`, 'blade', slab(f, [[heel + 0.02, 0.03], [toe - 0.03, 0.03], [toe - 0.05, sole], [heel + 0.01, sole]], -0.012, 0.012)));
-    out.push(hull(`skateSteel${s}`, 'trim', slab(f, [[heel + 0.01, 0.03], [heel + 0.02, 0.004], [toe - 0.06, 0], [toe - 0.025, 0.012], [toe - 0.02, 0.03]], -0.002, 0.002)));
+    const s = l.side > 0 ? 'L' : 'R', [boot, holder, steel] = skateHulls(pose, l, pose.postFoot && l.shinDir.y >= -0.5 ? pose.postFoot : skateFrame(pose, l));
+    out.push(hull(`skate${s}`, 'blade', boot), hull(`skateHolder${s}`, 'blade', holder), hull(`skateSteel${s}`, 'trim', steel));
   }
 }
 
