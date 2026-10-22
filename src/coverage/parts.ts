@@ -4,8 +4,9 @@
 import type { Pose } from '../posing/posing';
 import { add, cross, dot, FWD, len, mul, norm, sub, type Vec } from '../posing/vec';
 import { gearParts } from './gearShapes';
+import { helmetParts, maskFrame } from './helmetShape';
 
-export type PartMat = 'body' | 'jersey' | 'pad' | 'glove' | 'blocker' | 'trim' | 'stick' | 'blade';
+export type PartMat = 'body' | 'jersey' | 'pad' | 'glove' | 'blocker' | 'trim' | 'stick' | 'blade' | 'mask';
 
 /** A capsule from a to b with radius r (a sphere when a = b). */
 export interface CapsulePart { id: string; kind: 'capsule'; a: Vec; b: Vec; r: number; mat: PartMat }
@@ -15,7 +16,8 @@ export interface BoxPart { id: string; kind: 'box'; center: Vec; u: Vec; n: Vec;
 export interface HullPart { id: string; kind: 'hull'; pts: Vec[]; mat: PartMat }
 export type Part = CapsulePart | BoxPart | HullPart;
 
-export function goalieParts(pose: Pose): Part[] {
+/** look: where the mask faces (maskFrame); by default straight ahead of the shoulders, down at the ice. */
+export function goalieParts(pose: Pose, look = maskFrame(pose, null)): Part[] {
   const d = pose.dims, H = d.H, parts: Part[] = [];
   const cap = (id: string, a: Vec, b: Vec, r: number, mat: PartMat) => parts.push({ id, kind: 'capsule', a, b, r, mat });
   const box = (id: string, center: Vec, u: Vec, n: Vec, w: number, l: number, dp: number, mat: PartMat) =>
@@ -30,7 +32,6 @@ export function goalieParts(pose: Pose): Part[] {
   // The chest turns with the shoulder line (RVH turns the shoulders toward the post); the pelvis stays with the hips.
   const across = norm(sub(pose.shoulders[1], pose.shoulders[-1])), cn = norm(cross(across, pose.torsoDir));
   box('chest', add(pose.pelvis, mul(pose.torsoDir, d.torso * 0.55)), pose.torsoDir, cn, 2 * d.shoulderHalf + 0.1, d.torso * 1.1, 0.15 * H, 'jersey');
-  cap('head', pose.head, pose.head, 0.065 * H, 'body');
   for (const [w, h] of [['glove', pose.glove], ['blocker', pose.blocker]] as const) {
     cap(w + 'Shoulder', h.shoulder, h.shoulder, 0.05 * H, 'jersey');
     cap(w + 'UpperArm', h.shoulder, h.elbow, 0.04 * H, 'jersey');
@@ -38,7 +39,7 @@ export function goalieParts(pose: Pose): Part[] {
   }
   const gear = gearParts(pose);
   stopBehindBoard(parts.find(p => p.id === 'blockerForearm') as CapsulePart, gear.find(p => p.id === 'blocker') as HullPart, pose);
-  parts.push(...gear);
+  parts.push(...gear, ...helmetParts(look));
   return parts;
 }
 

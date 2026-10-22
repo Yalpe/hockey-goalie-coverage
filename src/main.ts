@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { computeCoverage, HullCache, hullToWorld, type Coverage, type Hull } from './coverage/coverage';
 import { nameHoles } from './coverage/holes';
+import { maskFrame } from './coverage/helmetShape';
 import { goalieParts } from './coverage/parts';
 import { IN, PUCK_HALF_T } from './dims';
 import {
@@ -199,9 +200,6 @@ document.querySelectorAll<HTMLElement>('[data-mode]').forEach(b => b.addEventLis
  */
 function updatePose(keepHands = false) {
   pose = solvePose(goalie);
-  const parts = goalieParts(pose);
-  goalieMesh.update(parts, pose);
-  hulls = hullCache.hulls(parts);
   helpers.update(pose, keepHands);
   renderWarn();
   updatePlacement();
@@ -217,8 +215,21 @@ function updatePlacement() {
   updateCoverage();
 }
 
+/**
+ * The goalie's parts, with the head turned to the Puck: rebuilds only the meshes and hulls that changed (a pose
+ * change, or the mask as the Puck or the goalie moves).
+ */
+function aimHead() {
+  goalieRoot.updateMatrixWorld();
+  const t = goalieRoot.worldToLocal(new THREE.Vector3(puck.x, PUCK_HALF_T, puck.z));
+  const look = maskFrame(pose, { x: t.x, y: t.y, z: t.z }), parts = goalieParts(pose, look);
+  goalieMesh.update(parts, pose, look);
+  hulls = hullCache.hulls(parts);
+}
+
 /** Recomputes the Coverage Shadow and Open Net from the Puck through the goalie's cached hulls. */
 function updateCoverage() {
+  aimHead();
   const root = { x: goalieRoot.position.x, z: goalieRoot.position.z, f: goalieRoot.rotation.y };
   const P = { x: puck.x, y: PUCK_HALF_T, z: puck.z };
   cov = computeCoverage(hulls.map(h => hullToWorld(h, root)), P);
@@ -384,14 +395,17 @@ function onPointerDown(e: PointerEvent) {
   if (e.target !== canvas || e.button !== 0) return;
   if (gizmo.busy(e)) { orbit.enabled = false; return; }   // the hand gizmo takes this press
   setRay(e);
+  // The hands only take a click once the goalie (or one of its hands) is selected: zoomed out they cover most of
+  // the goalie, so the first click always picks the goalie.
+  const handsLive = sel === 'goalie' || sel === 'glove' || sel === 'blocker';
   const hand = ray.intersectObjects([helpers.hands.glove, helpers.hands.blocker])[0];
-  if (hand) return select(hand.object === helpers.hands.glove ? 'glove' : 'blocker');
+  if (hand && handsLive) return select(hand.object === helpers.hands.glove ? 'glove' : 'blocker');
   if (sel === 'goalie' && ray.intersectObject(helpers.knob)[0]) return grab(e, { k: 'turn', pivot: { ...goalie.pos } });
   if (puckMesh.ring.visible && ray.intersectObject(puckMesh.hit)[0]) { select('puck'); return grab(e, { k: 'puck' }); }
   if (ray.intersectObject(puckMesh.group)[0]) return select('puck');   // in Puck's view it moves on the map
   const part = ray.intersectObjects(goalieMesh.group.children)[0];
-  if (part) {
-    const w = handOf(part.object.name);
+  if (part || hand) {
+    const w = part && handsLive ? handOf(part.object.name) : null;
     if (w) return select(w);
     select('goalie');
     const p = icePoint() ?? goalie.pos;

@@ -1,20 +1,23 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
+import type { MaskFrame } from '../coverage/helmetShape';
 import { partSig, type Part, type PartMat } from '../coverage/parts';
 import type { Pose } from '../posing/posing';
 import type { Vec } from '../posing/vec';
+import { createHelmetMesh } from './helmetMesh';
 import { createStickMesh } from './stickMesh';
 
 /**
- * The goalie: one mesh per part, each named after its part id (thighL, shinR, padL0, chest, head, gloveForearm,
- * glove, blocker…), but for the stick, a model of its own (stickMesh.ts, named stick) drawn from the same shape as its
- * parts. The parts are built on the pose's named joints, so this module is the only thing to replace with a rigged
- * model later; nothing else draws the goalie.
+ * The goalie: one mesh per part, each named after its part id (thighL, shinR, padL0, chest, throatGuard, gloveForearm,
+ * glove, blocker…), but for the stick and the mask, models of their own (stickMesh.ts and helmetMesh.ts, named stick
+ * and mask) drawn from the same shapes as their parts. The parts are built on the pose's named joints, so this module
+ * is the only thing to replace with a rigged model later; nothing else draws the goalie.
  */
 export interface GoalieMesh {
   /** Lives in the goalie's own frame: put it under a group placed and turned like the goalie. */
   group: THREE.Group;
-  update(parts: Part[], pose: Pose): void;
+  /** look: where the mask faces, the frame the parts were built with. */
+  update(parts: Part[], pose: Pose, look: MaskFrame): void;
 }
 
 const MATS: Record<PartMat, THREE.Material> = {
@@ -26,6 +29,7 @@ const MATS: Record<PartMat, THREE.Material> = {
   trim: new THREE.MeshStandardMaterial({ color: 0x8c99a6, roughness: 0.8 }),
   stick: new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.7 }),
   blade: new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 }),
+  mask: new THREE.MeshStandardMaterial({ color: 0xf5f5f2, roughness: 0.3 }),
 };
 
 const tv = (p: Vec) => new THREE.Vector3(p.x, p.y, p.z);
@@ -56,15 +60,16 @@ export function createGoalieMesh(): GoalieMesh {
   const group = new THREE.Group();
   group.name = 'goalie';
   const built = new Map<string, { sig: string; mesh: THREE.Mesh }>();
-  const stick = createStickMesh();
-  group.add(stick.mesh);
+  const stick = createStickMesh(), helmet = createHelmetMesh();
+  group.add(stick.mesh, helmet.group);
   return {
     group,
-    update(parts, pose) {
+    update(parts, pose, look) {
       stick.update(pose);
+      helmet.update(look);
       const seen = new Set<string>();
       for (const p of parts) {
-        if (p.id.startsWith('stick')) continue;
+        if (p.id.startsWith('stick') || p.id === 'mask') continue;
         seen.add(p.id);
         const s = partSig(p), old = built.get(p.id);
         if (old?.sig === s) continue;

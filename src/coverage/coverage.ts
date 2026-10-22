@@ -3,7 +3,8 @@
 // World frame: goal plane z = 0 (the goal line), ice y = 0, +x = the goalie's left (the shooter's right), shooter at +z.
 // The goalie is a list of convex parts in its own local frame (posing frame). Each part is dilated by the Puck in 3D
 // (Minkowski sum with the Puck cylinder) and its hull is cached in the goalie frame: the Puck is symmetric about the
-// vertical, so moving or turning the goalie and dragging the Puck never invalidate a hull.
+// vertical, so moving or turning the goalie and dragging the Puck never invalidate a hull, but for the mask and throat
+// guard, which turn with the head to follow the Puck.
 import * as C2 from 'clipper2-ts';
 import { Vector3 } from 'three';
 import { ConvexHull, type VertexNode } from 'three/addons/math/ConvexHull.js';

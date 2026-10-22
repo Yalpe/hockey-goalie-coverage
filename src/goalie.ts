@@ -92,7 +92,7 @@ function clampFeetWidth(g: GoalieSetup, inches: number) {
 }
 
 // The body parts that must stay out of the post. Arms, hands and stick are left out: the coach places those.
-const POST_CLEAR_PARTS = /^(pelvis|chest|head|\w+Shoulder|thigh|shin|pad)/;
+const POST_CLEAR_PARTS = /^(pelvis|chest|mask|\w+Shoulder|thigh|shin|pad)/;
 const POST = { x: MOUTH_HALF_W + POST_R, r: POST_R + 0.005 };   // post centre and how close a part may come
 
 /**
