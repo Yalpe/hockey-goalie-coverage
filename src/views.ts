@@ -49,7 +49,7 @@ export function viewPose(k: ViewKey, puck: PuckSpot, aspect: number, shooter: Sh
       // The shooter's own eyes, looking at the net, crouched over the shot at 0.74 of the shooter's height (1.3 m for a
       // 5'9" player). The Puck is below the picture, as it is for a shooter looking up at the net. A natural field of
       // view, widened only when the net would not fit.
-      const eyes = shooterSpot(puck, shooter.shoots);
+      const eyes = shooterSpot(puck, shooter.shoots, shooter.offsetM);
       const pos = v(eyes.x, 0.74 * shooter.heightM, eyes.z), target = v(0, MOUTH_H / 2, 0);
       return { pos, target, fov: clamp(2 * halfFov(pos, target, aspect, netCorners(1.3)), 50, 100) };
     }

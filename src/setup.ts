@@ -17,6 +17,8 @@ export interface Setup {
   view: ViewKey;
   /** The shooter's hand, for Shooter's view. */
   shoots: Shoots;
+  /** How far the Puck sits to the side of the shooter, in metres. */
+  offsetM: number;
   show: { cone: boolean };
 }
 
@@ -36,7 +38,7 @@ const RVH_POST: Partial<Record<StanceKey, 1 | -1>> = { rvhL: 1, rvhR: -1 };
 const V1 = {
   stance: 'butterfly' as StanceKey, heightIn: 69, catchSide: 'left' as CatchSide,
   depthIn: 72, facingDeg: 0, puckCm: { x: 0, z: 600 }, view: 'puck' as ViewKey, cone: true, shoots: 'left' as Shoots,
-  gripAboveIn: 1, rvhTurnDeg: 30, overlapTurnDeg: 60,
+  gripAboveIn: 1, rvhTurnDeg: 30, overlapTurnDeg: 60, offsetCm: 45,
 };
 /** Which way each post Stance faces at its post, by default. */
 const POST_FACING: Partial<Record<StanceKey, number>> = {
@@ -95,6 +97,7 @@ export function encodeSetup(s: Setup): string {
   put('pz', Math.round(s.puck.z * 100), V1.puckCm.z);
   put('v', VIEW_CODES[s.view], VIEW_CODES[V1.view]);
   put('sh', s.shoots === 'left' ? 'l' : 'r', 'l');
+  put('so', Math.round(s.offsetM * 100), V1.offsetCm);
   put('tc', s.show.cone ? 1 : 0, 1);
   return 'v1.' + compressToEncodedURIComponent(JSON.stringify(o));
 }
@@ -170,6 +173,7 @@ function decodeV1(o: Record<string, unknown>): Setup {
     puck: { x: int('px', V1.puckCm.x, -2000, 2000) / 100, z: int('pz', V1.puckCm.z, -500, 3000) / 100 },
     view: code('v', VIEW_CODES, V1.view),
     shoots: code('sh', { left: 'l', right: 'r' }, V1.shoots),
+    offsetM: int('so', V1.offsetCm, 10, 150) / 100,
     show: { cone: int('tc', 1, 0, 1) === 1 },   // older links may hold 'tm', the retired Puck-size margin toggle
   };
 }

@@ -17,13 +17,14 @@ import { createHandGizmo, type GizmoMode } from './scene/handGizmo';
 import { buildNet } from './scene/net';
 import { buildPuck, clampPuck, type PuckSpot } from './scene/puck';
 import { buildRink } from './scene/rink';
+import { createShooterMesh, SHOOTER_EYE } from './scene/shooterMesh';
 import { cornerMap } from './ui/cornerMap';
 import { holeLabels } from './ui/holeLabels';
 import { coverageCard } from './ui/coverageCard';
 import { goalieCard } from './ui/goalieCard';
 import { wheelNotches } from './ui/wheel';
 import { BadLink, decodeSetup, defaultSetup, encodeSetup, NAME_MAX, type Setup } from './setup';
-import type { Shoots } from './shooter';
+import { shooterSpot, type Shoots } from './shooter';
 import { VIEWS, viewPose, type ViewKey } from './views';
 
 const $ = <T extends Element = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
@@ -47,6 +48,9 @@ const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
 // OrbitControls sees the press.
 view.addEventListener('pointerdown', onPointerDown, { capture: true });
 const orbit = new OrbitControls(camera, canvas);
+// Middle-drag pans (its default is dolly, which only slid in and out toward the net); right-drag pans too. The wheel
+// still zooms.
+orbit.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.PAN };
 
 scene.add(buildRink(), buildNet());
 
@@ -62,10 +66,11 @@ const puck: PuckSpot = { ...opened.setup.puck };
 const goalie = opened.setup.goalie;
 const show = { ...opened.setup.show };
 let setupName = opened.setup.name;
-type Selection = 'puck' | 'goalie' | HandKey | null;
+type Selection = 'shooter' | 'goalie' | HandKey | null;
 let sel: Selection = null;
 let currentView: ViewKey = opened.setup.view;
 let shoots: Shoots = opened.setup.shoots;
+let offsetM = opened.setup.offsetM;   // how far the Puck sits to the side of the shooter
 let pose: Pose;
 let hulls: Hull[] = [];
 let cov: Coverage;
@@ -79,6 +84,10 @@ const goalieMesh = createGoalieMesh();
 const helpers = createGoalieHelpers();
 goalieRoot.add(goalieMesh.group, helpers.group);
 scene.add(goalieRoot);
+const shooterRoot = new THREE.Group();   // placed at the shooter's eyes, scaled to height, turned to face the net
+const shooterMesh = createShooterMesh();   // the stick is laid on the Puck by placeShooter
+shooterRoot.add(shooterMesh.group);
+scene.add(shooterRoot);
 const hullCache = new HullCache();
 const coverageLayer = createCoverageLayer();
 scene.add(coverageLayer.group);
@@ -148,7 +157,7 @@ $('[data-reset-hand]').addEventListener('click', () => {
   updatePose();
 });
 const map = cornerMap($<SVGSVGElement>('#cornerMap'), {
-  grab: k => { stopSweep(); if (k === 'puck') select('puck'); },   // in Shooter's view the map is the way to the Puck
+  grab: k => { stopSweep(); if (k === 'puck') select('shooter'); },   // in Shooter's view the map is the way to the Puck
   puck: (x, z) => setPuck(x, z, true),
   goalie: p => dragGoalieTo(p),
   turn: (p, pivot) => turnGoalieToward(p, pivot),
@@ -161,12 +170,31 @@ function renderCard() {
   $('[data-hand-title]').textContent = sel === 'glove' ? 'Glove Hand' : 'Blocker Hand (and stick)';
   document.querySelectorAll<HTMLElement>('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === gizmo.mode));
   document.querySelectorAll<HTMLElement>('[data-shoots]').forEach(b => b.classList.toggle('on', b.dataset.shoots === shoots));
+  if (document.activeElement !== offsetSlider) offsetSlider.value = String(Math.round(offsetM * 100));
+  $('[data-offset-val]').textContent = `${Math.round(offsetM * 100)} cm`;
 }
 document.querySelectorAll<HTMLElement>('[data-shoots]').forEach(b => b.addEventListener('click', () => {
   shoots = b.dataset.shoots as Shoots;
-  updatePlacement();   // a goalie following the shooter turns with the eyes
+  updatePlacement();   // a goalie following the shooter turns with the eyes; placeShooter resets the grip
   if (currentView === 'shooter') setView('shooter');
 }));
+// The Puck's offset to the side of the shooter, perpendicular to the shot. Moving it re-places the shooter (and a
+// following goalie), and brings Shooter's view along.
+const offsetSlider = $<HTMLInputElement>('#offsetCm');
+function setOffset(cm: number) {
+  const next = Math.min(1, Math.max(0.1, Math.round(cm / 5) * 5 / 100));
+  // The shooter stays put: the extra offset moves the Puck out to the side instead. The shooter sits offsetM off the
+  // Puck along the perpendicular (uz, -ux), so shifting the Puck the opposite way by the change holds the eyes still.
+  const d = Math.hypot(puck.x, puck.z) || 1, ux = puck.x / d, uz = puck.z / d;
+  const dSide = (shoots === 'left' ? 1 : -1) * (next - offsetM);
+  offsetM = next;
+  setPuck(puck.x - dSide * uz, puck.z + dSide * ux, true);
+}
+offsetSlider.addEventListener('input', () => setOffset(Number(offsetSlider.value)));
+$('[data-offset]').parentElement!.addEventListener('click', e => {
+  const n = (e.target as HTMLElement).closest<HTMLElement>('[data-offset]')?.dataset.offset;
+  if (n) setOffset(Math.round(offsetM * 100) + Number(n));
+});
 
 const isHand = (k: Selection): k is HandKey => k === 'glove' || k === 'blocker';
 
@@ -186,7 +214,7 @@ function select(k: Selection) {
   helpers.turnRing.visible = sel === 'goalie';
   gizmo.show(isHand(sel) ? sel : null);
   // The wheel sets a selected goalie's depth, or moves a selected hand along the shot, instead of zooming.
-  orbit.enableZoom = sel === null || sel === 'puck';
+  orbit.enableZoom = sel === null || sel === 'shooter';
   renderCard();
 }
 
@@ -207,7 +235,7 @@ function updatePose(keepHands = false) {
 
 /** The goalie moved or turned on the ice. Its pose and hulls stay as they are. */
 function updatePlacement() {
-  applyFollow(goalie, puck, shoots);
+  applyFollow(goalie, puck, shoots, offsetM);
   const at = placeGoalie(goalie, pose);
   goalieRoot.position.set(at.x, 0, at.z);
   goalieRoot.rotation.y = at.facingDeg / DEG;
@@ -227,8 +255,20 @@ function aimHead() {
   hulls = hullCache.hulls(parts);
 }
 
+/** Stands the shooter stand-in at the eyes, scaled to its height and turned to face the net, stick on the Puck. */
+function placeShooter() {
+  const eyes = shooterSpot(puck, shoots, offsetM);
+  shooterRoot.position.set(eyes.x, 0, eyes.z);
+  shooterRoot.scale.setScalar(goalie.heightM);
+  shooterRoot.rotation.y = Math.atan2(-eyes.x, -eyes.z);   // face the middle of the goal line
+  shooterRoot.updateMatrixWorld();
+  const blade = shooterRoot.worldToLocal(new THREE.Vector3(puck.x, PUCK_HALF_T, puck.z));   // the Puck, in the shooter's frame
+  shooterMesh.update(shoots, blade);
+}
+
 /** Recomputes the Coverage Shadow and Open Net from the Puck through the goalie's cached hulls. */
 function updateCoverage() {
+  placeShooter();
   aimHead();
   const root = { x: goalieRoot.position.x, z: goalieRoot.position.z, f: goalieRoot.rotation.y };
   const P = { x: puck.x, y: PUCK_HALF_T, z: puck.z };
@@ -329,7 +369,8 @@ viewbar.addEventListener('change', e => {
 
 function setView(k: ViewKey) {
   currentView = k;
-  const v = viewPose(k, puck, camera.aspect, { shoots, heightM: goalie.heightM });
+  const v = viewPose(k, puck, camera.aspect, { shoots, heightM: goalie.heightM, offsetM });
+  if (k === 'shooter') { shooterRoot.updateMatrixWorld(); v.pos.copy(shooterRoot.localToWorld(SHOOTER_EYE.clone())); }   // the model's own eyes
   camera.position.copy(v.pos);
   orbit.target.copy(v.target);
   camera.fov = v.fov;
@@ -345,6 +386,7 @@ function renderViewState() {
   viewbar.querySelectorAll<HTMLElement>('[data-view]').forEach(b => b.classList.toggle('on', b.dataset.view === currentView));
   const puckView = currentView === 'puck';
   puckMesh.ring.visible = !puckView;   // up close in Puck's view the ring would fill the screen; the map moves the Puck there
+  shooterRoot.visible = !puckView && currentView !== 'shooter';   // the camera sits inside/behind it in those views
   $('#youArePuck').style.display = puckView ? 'block' : 'none';
   $('#mapBox').style.display = puckView || currentView === 'shooter' ? '' : 'none';   // the Puck is out of the picture
   coverageLayer.lanesVisible = show.cone && !puckView;   // from behind the Puck, the lanes would fill the screen
@@ -380,7 +422,7 @@ function icePoint(): { x: number; z: number } | null {
 const handOf = (id: string): HandKey | null =>
   id.startsWith('glove') ? 'glove' : id.startsWith('blocker') || id.startsWith('stick') ? 'blocker' : null;
 
-type Drag = { k: 'puck' } | { k: 'goalie'; off: { x: number; z: number } } | { k: 'turn'; pivot: { x: number; z: number } };
+type Drag = { k: 'shooter'; off: { x: number; z: number } } | { k: 'goalie'; off: { x: number; z: number } } | { k: 'turn'; pivot: { x: number; z: number } };
 let drag: Drag | null = null, downAt: { x: number; y: number } | null = null;
 
 function grab(e: PointerEvent, d: Drag) {
@@ -401,8 +443,14 @@ function onPointerDown(e: PointerEvent) {
   const hand = ray.intersectObjects([helpers.hands.glove, helpers.hands.blocker])[0];
   if (hand && handsLive) return select(hand.object === helpers.hands.glove ? 'glove' : 'blocker');
   if (sel === 'goalie' && ray.intersectObject(helpers.knob)[0]) return grab(e, { k: 'turn', pivot: { ...goalie.pos } });
-  if (puckMesh.ring.visible && ray.intersectObject(puckMesh.hit)[0]) { select('puck'); return grab(e, { k: 'puck' }); }
-  if (ray.intersectObject(puckMesh.group)[0]) return select('puck');   // in Puck's view it moves on the map
+  // The shooter is the handle for the Puck now: big and easy to grab, and dragging it slides the whole rig. The Puck
+  // itself still moves on the map in Puck's and Shooter's views, where the shooter is out of the picture.
+  if (shooterRoot.visible && ray.intersectObject(shooterRoot, true)[0]) {
+    select('shooter');
+    const p = icePoint() ?? puck;
+    return grab(e, { k: 'shooter', off: { x: puck.x - p.x, z: puck.z - p.z } });
+  }
+  if (puckMesh.ring.visible && ray.intersectObject(puckMesh.group, true)[0]) return select('shooter');
   const part = ray.intersectObjects(goalieMesh.group.children)[0];
   if (part || hand) {
     const w = part && handsLive ? handOf(part.object.name) : null;
@@ -419,7 +467,7 @@ canvas.addEventListener('pointermove', e => {
   setRay(e);
   const p = icePoint();
   if (!p) return;
-  if (drag.k === 'puck') setPuck(p.x, p.z, false);   // the camera follows on release
+  if (drag.k === 'shooter') setPuck(p.x + drag.off.x, p.z + drag.off.z, false);   // the Puck keeps its offset under the grab; camera follows on release
   else if (drag.k === 'goalie') dragGoalieTo({ x: p.x + drag.off.x, z: p.z + drag.off.z });
   else turnGoalieToward(p, drag.pivot);
 });
@@ -429,7 +477,7 @@ canvas.addEventListener('pointerup', e => {
     const k = drag.k;
     drag = null;
     orbit.enabled = true;
-    if (k === 'puck') refollowView();
+    if (k === 'shooter') refollowView();
   } else if (downAt && Math.hypot(e.clientX - downAt.x, e.clientY - downAt.y) < 4) select(null);   // a click on empty space
   downAt = null;
   orbit.enabled = true;
@@ -468,7 +516,7 @@ function flash(msg: string, ms = 1600) {
 
 // ---------------- Setup link ----------------
 // The address bar always holds the Setup on screen: #v1.<...>, updated a moment after the coach stops editing.
-const currentSetup = (): Setup => ({ name: setupName, goalie, puck, view: currentView, shoots, show });
+const currentSetup = (): Setup => ({ name: setupName, goalie, puck, view: currentView, shoots, offsetM, show });
 let saveTimer: number | undefined;
 function saveNow() {
   clearTimeout(saveTimer);
@@ -526,6 +574,7 @@ function applySetup(s: Setup) {
   Object.assign(goalie, s.goalie);
   Object.assign(show, s.show);
   shoots = s.shoots;
+  offsetM = s.offsetM;
   setupName = s.name;
   renderName();
   select(null);

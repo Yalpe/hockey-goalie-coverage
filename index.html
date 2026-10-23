@@ -33,19 +33,25 @@
       <button type="button" id="cardToggle" aria-expanded="true" aria-label="Hide these controls"></button>
       <div data-panel="none">
         <b class="title"><span class="mouse">Click</span><span class="touch">Tap</span> something to change it</b>
-        <div class="hint">The <b>Puck</b> (orange ring) for the shooter, the <b>goalie</b>'s body, or a <b>hand</b>
-          (the glove, or the blocker and stick). Drag the goalie or the Puck on the ice. Drag empty space to look
+        <div class="hint">The <b>shooter</b> to move the Puck, the <b>goalie</b>'s body, or a <b>hand</b>
+          (the glove, or the blocker and stick). Drag the shooter or the goalie on the ice. Drag empty space to look
           around<span class="touch">, pinch to zoom</span>.</div>
       </div>
-      <div data-panel="puck">
+      <div data-panel="shooter">
         <b class="title">Shooter</b>
-        <div class="hint">The shooter carries the Puck. Drag it on the ice by its orange ring; in Puck's and Shooter's
-          views, drag it on the map instead. Or jump to a spot:</div>
+        <div class="hint">The shooter carries the Puck. Drag the shooter on the ice; in Puck's and Shooter's
+          views, drag the Puck on the map instead. Or jump to a spot:</div>
         <div class="btns wrap" data-puck-spots></div>
         <div class="row"><button type="button" data-sweep>▶ Sweep across the slot</button></div>
         <div class="row"><label>Shoots</label><span class="btns">
           <button type="button" data-shoots="left">Left</button><button type="button" data-shoots="right">Right</button>
         </span></div>
+        <div class="row"><label for="offsetCm">Puck offset<small>out to the side</small></label>
+          <button type="button" class="step" data-offset="-5" title="Puck closer in">−</button>
+          <input id="offsetCm" type="range" min="10" max="100" step="5">
+          <button type="button" class="step" data-offset="5" title="Puck further out">+</button>
+          <span class="val" data-offset-val></span>
+        </div>
         <div class="hint">Shooter's view looks from the shooter's eyes: beside the Puck, away from the stick, and as
           tall as the goalie.</div>
       </div>
