@@ -43,6 +43,14 @@
           views, drag the Puck on the map instead. Or jump to a spot:</div>
         <div class="btns wrap" data-puck-spots></div>
         <div class="row"><button type="button" data-sweep>▶ Sweep across the slot</button></div>
+        <div class="row"><label for="puckDistCm">Distance<small>out from the goal-line middle</small></label>
+          <button type="button" class="step" data-pdist="-5" title="Puck closer to the net">−</button>
+          <input id="puckDistCm" type="range" min="50" max="2150" step="5" aria-label="Distance from the middle of the goal line">
+          <button type="button" class="step" data-pdist="5" title="Puck further out">+</button>
+          <span class="val" data-pdist-val></span>
+        </div>
+        <div class="hint">Distance slides the Puck straight in or out along the line from the middle of the goal line,
+          keeping its angle.</div>
         <div class="row"><label>Shoots</label><span class="btns">
           <button type="button" data-shoots="left">Left</button><button type="button" data-shoots="right">Right</button>
         </span></div>

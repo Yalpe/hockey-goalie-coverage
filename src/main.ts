@@ -7,7 +7,7 @@ import { maskFrame } from './coverage/helmetShape';
 import { goalieParts } from './coverage/parts';
 import { IN, PUCK_HALF_T } from './dims';
 import {
-  applyFollow, depthNow, DEPTH_SPOTS, lockToPost, moveGoalieTo, placeGoalie, quantHand, setDepth, setFacing, setFeetWidthIn, setFlarePct, setHeightIn, setStance,
+  applyFollow, depthNow, DEPTH_SPOTS, depthText, lockToPost, moveGoalieTo, placeGoalie, quantHand, setDepth, setFacing, setFeetWidthIn, setFlarePct, setHeightIn, setStance,
 } from './goalie';
 import { defaultHands, solvePose, type HandKey, type Pose } from './posing/posing';
 import { createCoverageLayer } from './scene/coverageLayer';
@@ -172,6 +172,9 @@ function renderCard() {
   document.querySelectorAll<HTMLElement>('[data-shoots]').forEach(b => b.classList.toggle('on', b.dataset.shoots === shoots));
   if (document.activeElement !== offsetSlider) offsetSlider.value = String(Math.round(offsetM * 100));
   $('[data-offset-val]').textContent = `${Math.round(offsetM * 100)} cm`;
+  const dist = puckDistM();
+  if (document.activeElement !== puckDistSlider) puckDistSlider.value = String(Math.round(dist * 100));
+  $('[data-pdist-val]').textContent = depthText(dist);
 }
 document.querySelectorAll<HTMLElement>('[data-shoots]').forEach(b => b.addEventListener('click', () => {
   shoots = b.dataset.shoots as Shoots;
@@ -194,6 +197,21 @@ offsetSlider.addEventListener('input', () => setOffset(Number(offsetSlider.value
 $('[data-offset]').parentElement!.addEventListener('click', e => {
   const n = (e.target as HTMLElement).closest<HTMLElement>('[data-offset]')?.dataset.offset;
   if (n) setOffset(Math.round(offsetM * 100) + Number(n));
+});
+// The Puck's distance from the middle of the goal line. Moving it slides the Puck straight in or out along the line
+// it sits on, keeping its angle (clampPuck then holds it on the ice, so the shown distance tracks where it lands).
+const puckDistSlider = $<HTMLInputElement>('#puckDistCm');
+const puckDistM = () => Math.hypot(puck.x, puck.z);
+function setPuckDistance(cm: number) {
+  const next = Math.max(0.1, Math.round(cm / 5) * 5 / 100);
+  const d = puckDistM();
+  const ux = d > 1e-3 ? puck.x / d : 0, uz = d > 1e-3 ? puck.z / d : 1;   // straight out if it sits on the middle
+  setPuck(ux * next, uz * next, true);
+}
+puckDistSlider.addEventListener('input', () => setPuckDistance(Number(puckDistSlider.value)));
+$('[data-pdist]').parentElement!.addEventListener('click', e => {
+  const n = (e.target as HTMLElement).closest<HTMLElement>('[data-pdist]')?.dataset.pdist;
+  if (n) setPuckDistance(Math.round(puckDistM() * 100) + Number(n));
 });
 
 const isHand = (k: Selection): k is HandKey => k === 'glove' || k === 'blocker';
