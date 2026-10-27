@@ -24,7 +24,7 @@ import { coverageCard } from './ui/coverageCard';
 import { goalieCard } from './ui/goalieCard';
 import { wheelNotches } from './ui/wheel';
 import { BadLink, decodeSetup, defaultSetup, encodeSetup, NAME_MAX, type Setup } from './setup';
-import { shooterSpot, type Shoots } from './shooter';
+import { orbitPuck, puckBearing, puckFromEyes, shooterSpot, type Shoots } from './shooter';
 import { VIEWS, viewPose, type ViewKey } from './views';
 
 const $ = <T extends Element = HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
@@ -71,6 +71,10 @@ let sel: Selection = null;
 let currentView: ViewKey = opened.setup.view;
 let shoots: Shoots = opened.setup.shoots;
 let offsetM = opened.setup.offsetM;   // how far the Puck sits to the side of the shooter
+// The shooter's eyes, pinned on the ice while the Rotation slider swings the Puck round them; null places the
+// shooter behind the Puck as usual (shooterSpot). Any plain Puck move clears it.
+let shooterPinned: { x: number; z: number } | null = opened.setup.shooterEyes;
+const shooterEyes = () => shooterPinned ?? shooterSpot(puck, offsetM);
 let pose: Pose;
 let hulls: Hull[] = [];
 let cov: Coverage;
@@ -175,28 +179,44 @@ function renderCard() {
   const dist = puckDistM();
   if (document.activeElement !== puckDistSlider) puckDistSlider.value = String(Math.round(dist * 100));
   $('[data-pdist-val]').textContent = depthText(dist);
+  const rot = Math.round(puckBearing(shooterEyes(), puck));
+  if (document.activeElement !== puckRotSlider) puckRotSlider.value = String(rot);
+  $('[data-rot-val]').textContent = rot === 0 ? 'shot line' : `${Math.abs(rot)}° ${rot > 0 ? 'right' : 'left'}`;
 }
 document.querySelectorAll<HTMLElement>('[data-shoots]').forEach(b => b.addEventListener('click', () => {
   shoots = b.dataset.shoots as Shoots;
   updatePlacement();   // a goalie following the shooter turns with the eyes; placeShooter resets the grip
   if (currentView === 'shooter') setView('shooter');
 }));
-// The Puck's offset to the side of the shooter, perpendicular to the shot. Moving it re-places the shooter (and a
-// following goalie), and brings Shooter's view along.
+// The Puck's reach: how far it sits out in front of the shooter along the stick. The shooter stays put and the Puck
+// slides in or out from its eyes, keeping the Puck's bearing (0 when the shooter is not planted, so straight along the
+// shot line). shooterSpot then re-derives the same eyes from the moved Puck, so an un-planted shooter holds its spot.
 const offsetSlider = $<HTMLInputElement>('#offsetCm');
 function setOffset(cm: number) {
   const next = Math.min(1, Math.max(0.1, Math.round(cm / 5) * 5 / 100));
-  // The shooter stays put: the extra offset moves the Puck out to the side instead. The shooter sits offsetM off the
-  // Puck along the perpendicular (uz, -ux), so shifting the Puck the opposite way by the change holds the eyes still.
-  const d = Math.hypot(puck.x, puck.z) || 1, ux = puck.x / d, uz = puck.z / d;
-  const dSide = (shoots === 'left' ? 1 : -1) * (next - offsetM);
+  const eyes = shooterEyes();   // the current eyes, before the reach changes
+  const p = puckFromEyes(eyes, next, puckBearing(eyes, puck));
   offsetM = next;
-  setPuck(puck.x - dSide * uz, puck.z + dSide * ux, true);
+  setPuck(p.x, p.z, true, shooterPinned !== null);
 }
 offsetSlider.addEventListener('input', () => setOffset(Number(offsetSlider.value)));
 $('[data-offset]').parentElement!.addEventListener('click', e => {
   const n = (e.target as HTMLElement).closest<HTMLElement>('[data-offset]')?.dataset.offset;
   if (n) setOffset(Math.round(offsetM * 100) + Number(n));
+});
+// Rotation: plant the shooter where it stands now and swing the Puck round its eyes to a bearing (0 = the shot line
+// to the net, + = toward the shooter's right / 3 o'clock, − its left / 9 o'clock), keeping the Puck's reach.
+const puckRotSlider = $<HTMLInputElement>('#puckRotDeg');
+function setRotation(deg: number) {
+  const eyes = shooterEyes();
+  shooterPinned = { x: eyes.x, z: eyes.z };
+  const p = orbitPuck(eyes, puck, Math.max(-90, Math.min(90, Math.round(deg))));
+  setPuck(p.x, p.z, true, true);
+}
+puckRotSlider.addEventListener('input', () => setRotation(Number(puckRotSlider.value)));
+$('[data-rot]').parentElement!.addEventListener('click', e => {
+  const n = (e.target as HTMLElement).closest<HTMLElement>('[data-rot]')?.dataset.rot;
+  if (n) setRotation(Math.round(puckBearing(shooterEyes(), puck)) + Number(n));
 });
 // The Puck's distance from the middle of the goal line. Moving it slides the Puck straight in or out along the line
 // it sits on, keeping its angle (clampPuck then holds it on the ice, so the shown distance tracks where it lands).
@@ -253,7 +273,7 @@ function updatePose(keepHands = false) {
 
 /** The goalie moved or turned on the ice. Its pose and hulls stay as they are. */
 function updatePlacement() {
-  applyFollow(goalie, puck, shoots, offsetM);
+  applyFollow(goalie, puck, shooterEyes());
   const at = placeGoalie(goalie, pose);
   goalieRoot.position.set(at.x, 0, at.z);
   goalieRoot.rotation.y = at.facingDeg / DEG;
@@ -275,10 +295,10 @@ function aimHead() {
 
 /** Stands the shooter stand-in at the eyes, scaled to its height and turned to face the net, stick on the Puck. */
 function placeShooter() {
-  const eyes = shooterSpot(puck, shoots, offsetM);
+  const eyes = shooterEyes();
   shooterRoot.position.set(eyes.x, 0, eyes.z);
   shooterRoot.scale.setScalar(goalie.heightM);
-  shooterRoot.rotation.y = Math.atan2(-eyes.x, -eyes.z);   // face the middle of the goal line
+  shooterRoot.rotation.y = Math.atan2(puck.x - eyes.x, puck.z - eyes.z);   // skates point to the Puck
   shooterRoot.updateMatrixWorld();
   const blade = shooterRoot.worldToLocal(new THREE.Vector3(puck.x, PUCK_HALF_T, puck.z));   // the Puck, in the shooter's frame
   shooterMesh.update(shoots, blade);
@@ -302,8 +322,12 @@ function updateCoverage() {
   scheduleSave();
 }
 
-/** Moves the Puck, kept on the ice. refollow: bring a following view along now (not while dragging it in 3D). */
-function setPuck(x: number, z: number, refollow: boolean) {
+/**
+ * Moves the Puck, kept on the ice. refollow: bring a following view along now (not while dragging it in 3D).
+ * keepPin: this move is the Rotation slider swinging the Puck round a planted shooter; any other move un-plants it.
+ */
+function setPuck(x: number, z: number, refollow: boolean, keepPin = false) {
+  if (!keepPin) shooterPinned = null;
   Object.assign(puck, clampPuck(x, z));
   puckMesh.group.position.set(puck.x, 0, puck.z);
   if (goalie.follow !== 'off') updatePlacement(); else updateCoverage();   // a following goalie squares up to the Puck
@@ -387,7 +411,7 @@ viewbar.addEventListener('change', e => {
 
 function setView(k: ViewKey) {
   currentView = k;
-  const v = viewPose(k, puck, camera.aspect, { shoots, heightM: goalie.heightM, offsetM });
+  const v = viewPose(k, puck, camera.aspect, { heightM: goalie.heightM, eyes: shooterEyes() });
   if (k === 'shooter') { shooterRoot.updateMatrixWorld(); v.pos.copy(shooterRoot.localToWorld(SHOOTER_EYE.clone())); }   // the model's own eyes
   camera.position.copy(v.pos);
   orbit.target.copy(v.target);
@@ -534,7 +558,7 @@ function flash(msg: string, ms = 1600) {
 
 // ---------------- Setup link ----------------
 // The address bar always holds the Setup on screen: #v1.<...>, updated a moment after the coach stops editing.
-const currentSetup = (): Setup => ({ name: setupName, goalie, puck, view: currentView, shoots, offsetM, show });
+const currentSetup = (): Setup => ({ name: setupName, goalie, puck, view: currentView, shoots, offsetM, shooterEyes: shooterPinned, show });
 let saveTimer: number | undefined;
 function saveNow() {
   clearTimeout(saveTimer);
@@ -593,6 +617,7 @@ function applySetup(s: Setup) {
   Object.assign(show, s.show);
   shoots = s.shoots;
   offsetM = s.offsetM;
+  shooterPinned = s.shooterEyes;
   setupName = s.name;
   renderName();
   select(null);

@@ -4,7 +4,6 @@ import {
   boxCorners, defaultHands, feetWidthRangeIn, frontReach, placeAtPost, postFacing, STANCES,
   type HandTarget, type Pose, type PoseSetup, type StanceKey,
 } from './posing/posing';
-import { shooterSpot, type Shoots } from './shooter';
 
 /**
  * How the goalie is placed:
@@ -158,9 +157,9 @@ export function placeGoalie(g: GoalieSetup, pose: Pose): { x: number; z: number;
  * the rest); placed freely, the goalie keeps its distance and slides round onto the angle. A post Stance at the post
  * stays put.
  */
-export function applyFollow(g: GoalieSetup, puck: { x: number; z: number }, shoots: Shoots, offsetM: number) {
+export function applyFollow(g: GoalieSetup, puck: { x: number; z: number }, eyes: { x: number; z: number }) {
   if (g.follow === 'off' || g.lock === 'post') return;
-  const t = g.follow === 'shooter' ? shooterSpot(puck, shoots, offsetM) : puck;
+  const t = g.follow === 'shooter' ? eyes : puck;
   g.facingDeg = Math.round(clamp(Math.atan2(t.x, Math.max(t.z, 0.05)) * DEG, -80, 80));
   if (g.lock === 'free') {
     const r = Math.hypot(g.pos.x, g.pos.z), f = g.facingDeg / DEG;

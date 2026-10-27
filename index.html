@@ -54,13 +54,21 @@
         <div class="row"><label>Shoots</label><span class="btns">
           <button type="button" data-shoots="left">Left</button><button type="button" data-shoots="right">Right</button>
         </span></div>
-        <div class="row"><label for="offsetCm">Puck offset<small>out to the side</small></label>
+        <div class="row"><label for="offsetCm">Puck reach<small>out in front, along the stick</small></label>
           <button type="button" class="step" data-offset="-5" title="Puck closer in">−</button>
           <input id="offsetCm" type="range" min="10" max="100" step="5">
           <button type="button" class="step" data-offset="5" title="Puck further out">+</button>
           <span class="val" data-offset-val></span>
         </div>
-        <div class="hint">Shooter's view looks from the shooter's eyes: beside the Puck, away from the stick, and as
+        <div class="row"><label for="puckRotDeg">Rotation<small>round the shooter</small></label>
+          <button type="button" class="step" data-rot="-5" title="Swing toward 9 o'clock">−</button>
+          <input id="puckRotDeg" type="range" min="-90" max="90" step="5" aria-label="Puck rotation round the shooter">
+          <button type="button" class="step" data-rot="5" title="Swing toward 3 o'clock">+</button>
+          <span class="val" data-rot-val></span>
+        </div>
+        <div class="hint">Rotation plants the shooter and swings the Puck round them from 9 to 3 o'clock, with midnight
+          on the shot line to the net; the shooter turns to face the Puck. Moving the Puck any other way un-plants them.</div>
+        <div class="hint">Shooter's view looks from the shooter's eyes, behind the Puck on the shot line and as
           tall as the goalie.</div>
       </div>
       <div data-panel="goalie" id="goaliePanel"></div>

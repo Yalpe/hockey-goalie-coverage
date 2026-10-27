@@ -17,8 +17,11 @@ export interface Setup {
   view: ViewKey;
   /** The shooter's hand, for Shooter's view. */
   shoots: Shoots;
-  /** How far the Puck sits to the side of the shooter, in metres. */
+  /** How far the Puck reaches out in front of the shooter, along the stick, in metres. */
   offsetM: number;
+  /** The shooter's eyes, pinned on the ice when the Rotation slider has swung the Puck round them; null when the
+   * shooter is placed behind the Puck as usual (shooterSpot). */
+  shooterEyes: { x: number; z: number } | null;
   show: { cone: boolean };
 }
 
@@ -98,6 +101,7 @@ export function encodeSetup(s: Setup): string {
   put('v', VIEW_CODES[s.view], VIEW_CODES[V1.view]);
   put('sh', s.shoots === 'left' ? 'l' : 'r', 'l');
   put('so', Math.round(s.offsetM * 100), V1.offsetCm);
+  if (s.shooterEyes) { o.ex = Math.round(s.shooterEyes.x * 100); o.ez = Math.round(s.shooterEyes.z * 100); }
   put('tc', s.show.cone ? 1 : 0, 1);
   return 'v1.' + compressToEncodedURIComponent(JSON.stringify(o));
 }
@@ -174,6 +178,7 @@ function decodeV1(o: Record<string, unknown>): Setup {
     view: code('v', VIEW_CODES, V1.view),
     shoots: code('sh', { left: 'l', right: 'r' }, V1.shoots),
     offsetM: int('so', V1.offsetCm, 10, 150) / 100,
+    shooterEyes: o.ex === undefined ? null : { x: int('ex', 0, -2000, 2000) / 100, z: int('ez', 0, -500, 3000) / 100 },
     show: { cone: int('tc', 1, 0, 1) === 1 },   // older links may hold 'tm', the retired Puck-size margin toggle
   };
 }

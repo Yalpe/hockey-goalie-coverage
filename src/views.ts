@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { CREASE_RADIUS, MOUTH_H, NET_BASE_DEPTH, NET_BASE_HALF_W, PUCK_HALF_T } from './dims';
 import { POST_H, POST_X } from './scene/net';
 import type { PuckSpot } from './scene/puck';
-import { shooterSpot, type Shooter } from './shooter';
 
 export type ViewKey = 'puck' | 'shooter' | 'top' | 'behind' | 'orbit';
 
@@ -35,7 +34,7 @@ const netCorners = (margin: number) =>
   [[-POST_X, POST_H], [POST_X, POST_H], [-POST_X, 0], [POST_X, 0]].map(([x, y]): [THREE.Vector3, number] => [v(x, y, 0), margin]);
 
 /** Where the camera sits for a view preset. Every preset follows the Puck except Free orbit. */
-export function viewPose(k: ViewKey, puck: PuckSpot, aspect: number, shooter: Shooter): ViewPose {
+export function viewPose(k: ViewKey, puck: PuckSpot, aspect: number, shooter: { heightM: number; eyes: PuckSpot }): ViewPose {
   const d = Math.hypot(puck.x, puck.z) || 1, ux = puck.x / d, uz = puck.z / d;
   switch (k) {
     case 'puck': {
@@ -49,7 +48,7 @@ export function viewPose(k: ViewKey, puck: PuckSpot, aspect: number, shooter: Sh
       // The shooter's own eyes, looking at the net, crouched over the shot at 0.74 of the shooter's height (1.3 m for a
       // 5'9" player). The Puck is below the picture, as it is for a shooter looking up at the net. A natural field of
       // view, widened only when the net would not fit.
-      const eyes = shooterSpot(puck, shooter.shoots, shooter.offsetM);
+      const eyes = shooter.eyes;
       const pos = v(eyes.x, 0.74 * shooter.heightM, eyes.z), target = v(0, MOUTH_H / 2, 0);
       return { pos, target, fov: clamp(2 * halfFov(pos, target, aspect, netCorners(1.3)), 50, 100) };
     }
